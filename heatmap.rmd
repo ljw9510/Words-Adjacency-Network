@@ -1,0 +1,98 @@
+---
+title: "heatmap"
+output: html_document
+date: "2022-11-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(highcharter)
+library(corrplot)
+library(heatmaply)
+```
+
+```{r}
+word_list = read.table("./dataset/functionwords_list.txt", head=FALSE)
+word_list <- as.matrix(word_list)
+
+book = read.table("./dataset/austen_2.txt", head=FALSE)
+colnames(book) = word_list
+row.names(book) = word_list
+```
+
+
+```{r}
+book <-t(apply(book,1, function(x) if (max(x)==0) x else x/max(x)))
+book <- as.matrix(book)
+```
+
+Directly draw heatmap. There are a lot of zero rows (white).
+
+```{r}
+heatmap(book)
+```
+If we delete the all zero rows and columns
+
+```{r}
+data = book
+data = data[which(rowSums(book) > 0),]
+data = data[,which(colSums(book) > 0)]
+heatmap(data)
+```
+
+Another type of heatmap, but only with first 20 words
+
+```{r}
+K = 20
+data = book[1:K,1:K]
+heatmaply(data, 
+  dendrogram = "column",
+  xlab = "", ylab = "", 
+  main = "",
+  scale = "none",
+  # margins = c(60,100,40,20),
+  grid_color = "white",
+  grid_width = 0.000000001,
+  titleX = TRUE,
+  hide_colorbar = FALSE,
+  branches_lwd = 0.01,
+  label_names = c("From", "To:", "Value"),
+  fontsize_row = 6, fontsize_col = 6,
+  labCol = colnames(data),
+  labRow = rownames(data),
+  heatmap_layers = theme(axis.line=element_blank())
+)
+```
+It is hard to show 200+ words at the same time. The following is the K=100 heatmap
+
+```{r}
+K = 100
+data = book[1:K,1:K]
+heatmaply(data, 
+  dendrogram = "column",
+  xlab = "", ylab = "", 
+  main = "",
+  scale = "none",
+  # margins = c(60,100,40,20),
+  grid_color = "white",
+  grid_width = 0.000000001,
+  titleX = TRUE,
+  hide_colorbar = FALSE,
+  branches_lwd = 0.01,
+  label_names = c("From", "To:", "Value"),
+  fontsize_row = 6, fontsize_col = 6,
+  labCol = colnames(data),
+  labRow = rownames(data),
+  heatmap_layers = theme(axis.line=element_blank())
+)
+```
+If we use correlation plot. Row and column labels are not clear.
+
+
+```{r}
+corrplot(book, 'square', tl.cex=0.2)
+```
