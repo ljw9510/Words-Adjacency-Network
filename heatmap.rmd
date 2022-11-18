@@ -13,22 +13,82 @@ library(ggplot2)
 library(highcharter)
 library(corrplot)
 library(heatmaply)
+library(tidyverse)
+library(jsonlite)
+library(tidygraph)
+library(ggraph)
+theme_set(theme_bw())
 ```
 
 ```{r}
 word_list = read.table("./dataset/functionwords_list.txt", head=FALSE)
 word_list <- as.matrix(word_list)
-
-book = read.table("./dataset/austen_2.txt", head=FALSE)
-colnames(book) = word_list
-row.names(book) = word_list
 ```
 
 
 ```{r}
+book_names = c("austen_2", 
+               "austen_4", 
+               "dickens_1", 
+               "dickens_4",
+               "shakespeare_1",
+               "shakespeare_5",
+               "twain_1",
+               "twain_4")
+
+book_fullnames = c("Jane Austen, Emma",
+                   "Jane Austen, Pride and Prejudice",
+                   "Charles Dickens, A Christmas Carol",
+                   "Charles Dickens, Oliver Twist",
+                   "William Shakespeare, Hamlet",
+                   "William Shakespeare, Romeo and Juliet",
+                   "Mark Twain, Adventures of Huckleberry Finn",
+                   "Mark Twain, The Adventures of Tom Sawyer")
+```
+
+
+```{r}
+i = 8
+book_name = paste0("./dataset/", book_names[i], ".txt")
+book = read.table(book_name, head=FALSE)
+colnames(book) = word_list
+row.names(book) = word_list
+
+# Normalizing rows by row max
 book <-t(apply(book,1, function(x) if (max(x)==0) x else x/max(x)))
 book <- as.matrix(book)
 ```
+
+
+```{r}
+ggraph(book, layout = "matrix") +
+  geom_edge_tile() +
+  coord_fixed() +
+  ggtitle(book_fullnames[i])
+  #title(book_fullnames[i])
+  #geom_node_text(aes(label = word_list), x = -1, nudge_y = 0.5) +
+  #geom_node_text(aes(label = word_list), y = -1, nudge_x = -0.5)
+```
+
+```{r}
+par(mfrow=c(2,4))
+for (i in 1:length(book_names)){
+  book_name = paste0("./dataset/", book_names[i], ".txt")
+  print(book_name)
+  book = read.table(book_name, head=FALSE)
+  colnames(book) = word_list
+  row.names(book) = word_list
+  
+  # Normalizing rows by row max
+  book <-t(apply(book,1, function(x) if (max(x)==0) x else x/max(x)))
+  book <- as.matrix(book)
+  
+  ggraph(book, layout = "matrix") +
+    geom_edge_tile() +
+    coord_fixed()
+}
+```
+
 
 Directly draw heatmap. There are a lot of zero rows (white).
 
@@ -71,7 +131,10 @@ It is hard to show 200+ words at the same time. The following is the K=100 heatm
 
 ```{r}
 K = 100
-data = book[1:K,1:K]
+data = book
+data = data[which(rowSums(book) > 0),]
+data = data[,which(colSums(book) > 0)]
+data = data[1:K,1:K]
 heatmaply(data, 
   dendrogram = "column",
   xlab = "", ylab = "", 
@@ -96,3 +159,6 @@ If we use correlation plot. Row and column labels are not clear.
 ```{r}
 corrplot(book, 'square', tl.cex=0.2)
 ```
+
+
+
