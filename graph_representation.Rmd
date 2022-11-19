@@ -3,6 +3,7 @@ title: "Graph Representation"
 output: pdf_document
 ---
 
+
     In this note, we implement one type of graph visualization. Due to the size 
     of the graph, we plot the largest connected component of the full graph.
 
