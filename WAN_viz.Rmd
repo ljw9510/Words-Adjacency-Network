@@ -1,0 +1,141 @@
+---
+title: "Visualization"
+author: "Hao Yan"
+date: "11/18/2022"
+output: html_document
+---
+
+```{r}
+library(demogR)
+library(tidyverse)
+library(igraph)
+library(ggraph)
+library(tidygraph)
+
+path_adj2 = function(k) {
+  m <- odiag(rep(1, k-1), 1)
+  diag(m[-1,]) <- rep(1, k-1)
+  m
+}
+
+
+tree_sample2 = function(A, B, x){
+  # A = N by N matrix giving edge weights on networks
+  # B = adjacency matrix of the tree motif rooted at first node
+  # Nodes in tree B is ordered according to the depth-first-ordering
+  # samples a tree B from a given pivot x as the first node
+  flag = T
+  k = nrow(B)
+  emb = c(x) # initialize path embedding
+
+  for(i in 2:k){
+    j = min(which(B[,i]==1))
+    nbs_j = which(A[emb[j], ] > 0)
+    if(length(nbs_j) > 0){
+      y = sample(nbs_j, 1) 
+    }else{
+      flag = F
+      y = emb[j]
+      print('tree_sample_failed:isolated') 
+    }
+    emb = c(emb, y)
+  }
+  list(emb = emb, flag = flag)
+}
+
+glauber_gen_update2 = function(A, B, emb){
+    # A = N by N matrix giving edge weights on networks
+    # emb = current embedding of the tree motif with adj mx B
+    # updates the current embedding using Glauber rule
+    
+    n = nrow(A)
+    k = nrow(B)
+    j = sample(1:k, 1) # choose a random node to update
+    nbh_in = which(B[,j]==1) # indices of nbs of j in B
+    nbh_out = which(B[j,]==1) # indices of nbs of j in B
+    
+    # build distribution for resampling emb[j] and resample emb[j]
+    dist = rep(1, n)
+    if (length(nbh_in) !=0 ) {
+        for (r in nbh_in){
+            dist = dist * A[emb[r],]
+        }  
+    }
+    if (length(nbh_out) != 0 ){
+        for (r in nbh_out){
+            dist = dist * A[,emb[r]]
+        }  
+    }
+    if (sum(dist) > 0){
+      dist = dist / sum(dist)
+      y = sample(which(A[1,]>=0), 1, prob = dist)
+      emb[j] = y
+      names(emb)[j] = names(y)
+    }
+    else {
+        y = sample(which(A[1,]>=0), 1)
+        emb[j] = y
+        names(emb)[j] = names(y)
+        print('Glauber move rejected') # Won't happen once valid embedding is established
+    }
+    return(emb)
+}  
+
+get_plot = function(df, trajectory_length, emb = NULL) {
+  G = as_tbl_graph(df)
+  Adjacency_mat = as_adj(G, sparse = F)
+  tree_adj_mat = path_adj2(trajectory_length)
+  if(is.null(emb)) {
+    N = 100
+    counter = 0
+    while(counter < N) {
+      x0 = sample(which(Adjacency_mat[1,]>=0), 1)  # random initial location of RW
+      result = tree_sample2(Adjacency_mat, tree_adj_mat, x0) # initial sampling of tree motif F
+      if(result$flag) {
+        emb2 = result$emb
+        break
+      }
+      counter = counter + 1
+    }
+  }
+  else {
+    emb2 = glauber_gen_update2(Adjacency_mat, tree_adj_mat, emb)
+  }
+  
+  df$color = "origin"
+  for(a in 1:length(emb2)) {
+    for(b in 1:length(emb2)) {
+      u = emb2[a]
+      v = emb2[b]
+      bool = df$from == names(u) & df$to == names(v)
+      if(sum(bool)) {
+        if(abs(a-b) == 1) {
+          df[bool,]$color = "adj"
+        } else {
+          df[bool,]$color = "nonadj"
+        }
+      }
+    }
+  }
+  G = as_tbl_graph(df)
+  p = G %N>% 
+    mutate(selected = name %in% names(emb2)) %>% 
+    ggraph(layout = "kk") +
+    geom_edge_link(aes(col = color), width = 0.2) +
+    geom_node_label(aes(label = name, col = selected))
+  list(p = p, emb = emb2)
+}
+```
+
+```{r}
+df = highschool %>% filter(year == 1958)
+max_iter = 10
+emb = NULL
+for(iter in 0:max_iter) { 
+  result = get_plot(df, 8, emb)
+  print(result$p)
+  emb = result$emb
+  iter = iter + 1
+}
+```
+
