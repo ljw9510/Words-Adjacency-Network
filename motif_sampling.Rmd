@@ -1,0 +1,281 @@
+---
+title: "Motif Sampling"
+author: "Joowon Lee"
+output: pdf_document
+---
+
+In this note, we implement motif sampling proposed by Lyu et al., (2022) [[paper]](https://arxiv.org/abs/1910.09483)
+to create conditional homomorphism density profile for novel dataset.
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 4, fig.height = 4)
+```
+
+```{r}
+path_adj = function(k1, k2){
+    # generates adjacency matrix for the path motif 
+    # of k1 left nodes and k2 right nodes
+    
+    if (k1 == 0 | k2 == 0) {
+        
+        k3 = max(k1, k2)
+        temp = matrix(0, nrow = k3+1, ncol = k3+1)
+        if (k3 > 0) {
+            for (i in 1:(nrow(temp)-1)){  # make off-diagonal matrix
+                temp[i,i+1] = 1
+            }
+        }
+        return(temp)
+        
+    } else {
+        
+        temp = matrix(0, nrow = k1+k2+1, ncol = k1+k2+1)
+        for (i in 1:(nrow(temp)-1)){  # make off-diagonal matrix
+            temp[i,i+1] = 1
+        }
+        temp[k1+1, k1+2] = 0
+        temp[1, k1+2] = 1
+        return(temp)
+        
+    }
+}
+
+cycle_adj = function(k1, k2){
+    # generates adjacency matrix for the path motif 
+    # of k1 left nodes and k2 right nodes
+    
+    A = path_adj(k1, k2)
+    if (k1 == 0 & k2 == 0) {
+        A[1,1] = 1
+    } else if (k1 == 0 | k2 == 0) {
+        k3 = max(k1, k2)
+        A[1, k3+1] = A[1, k3+1] + 1
+    } else {
+        A[k1+1, k1+k2+1] = A[k1+1, k1+k2+1] + 1
+    }
+    return(A)
+}
+
+# general  (only works for 0,0)
+chdp_gen_exact = function(novel, B, C, filt_lvl){ 
+    n = dim(novel)[1]
+    k = dim(B)[1]
+    
+    hd_path = 0
+    hd_cycle_filt = rep(0, length = filt_lvl)
+    itertools.product = expand.grid(rep(list(1:n), k)) 
+    lvl = 0
+    
+    while (lvl <= (filt_lvl-1)){
+        
+        m = 1
+        while (m <= nrow(itertools.product)){
+            
+            x = itertools.product[m,]
+            wt1 = 1; wt2 = 1
+            
+            for (i in 1:k){
+                for (j in 1:k){
+                    wt1 = wt1 * ((novel[x[i], x[j]])^B[i,j]) 
+                    wt2 = wt2 * ((novel[x[i], x[j]])^B[i,j])
+                    if (C[i,j] > 0) {
+                        wt2 = wt2 * ifelse((novel[x[i], x[j]]) >= (lvl / filt_lvl), 1, 0)
+                    }
+                }
+            }
+            
+            hd_cycle_filt[(lvl+1)] = hd_cycle_filt[(lvl+1)] + wt2
+            if (lvl == 0) {
+                hd_path = hd_path + wt1
+            }
+            m = m+1
+        }
+        #  progress status
+        if ((100*lvl/filt_lvl)%%1==0){
+            print(round(100*(lvl/filt_lvl)%%1))
+        }
+        lvl = lvl + 1
+    }
+    return(hd_cycle_filt/hd_path)
+}
+
+chdp_path_exact = function(novel, filt_lvl, k1, k2){
+    
+    B = path_adj(k1, k2)
+    C = path_adj(k1, k2) - B
+    
+    if (k1 == 0 & k2 == 0){
+        B = cycle_adj(k1, k2)
+        C = cycle_adj(k1, k2)
+    }
+    
+    y = chdp_gen_exact(novel, B, C, filt_lvl)
+    return(y)
+    
+}
+
+# MCMC
+
+# indices function : find row index which has 1 value per each column
+
+tree_sample = function(novel, B, x) {
+    # A = N by N matrix giving edge weights on networks
+    # B = adjacency matrix of the tree motif rooted at first node
+    # Nodes in tree B is ordered according to the depth-first-ordering
+    # samples a tree B from a given pivot x as the first node
+    
+    n = dim(novel)[1]
+    k = dim(B)[1]
+    emb = x # initialize path embedding; root (random sample from 1:n)
+    
+    i = 2
+    while (i<=k){
+        j = which(B[,i]==1) # find_parent function (indices);
+        
+        if ( sum(novel[emb[j],]) > 0 ){ # find node with edge >= 1 
+            dist = novel[emb[j], ] / sum(novel[emb[j], ]) # uniform distribution
+            y = sample(seq(1, n), 1, prob = dist)
+        } else{
+            y = emb[j]
+            print('path_sample_failed:isolated')
+        }
+        emb = c(emb, y)
+        i = i+1
+    }
+    return(emb)
+}
+
+glauber_gen_update = function(novel, B, emb){
+    # A = N by N matrix giving edge weights on networks
+    # emb = current embedding of the tree motif with adj mx B
+    # updates the current embedding using Glauber rule
+    
+    n = dim(novel)[1]
+    k = dim(B)[1]
+    
+    j = sample(1:k, 1) # choose a random node to update
+    nbh_in = which(B[,j]==1) # indices of nbs of j in B
+    nbh_out = which(B[j,]==1) # indices of nbs of j in B
+    
+    # build distribution for resampling emb[j] and resample emb[j]
+    dist = rep(1, n)
+    if (length(nbh_in) !=0 ) {
+        for (r in nbh_in){
+            dist = dist * novel[emb[r],]
+        }  
+    }
+    if (length(nbh_out) != 0 ){
+        for (r in nbh_out){
+            dist = dist * novel[,emb[r]]
+        }  
+    }
+    if (sum(dist) > 0){
+        dist = dist / sum(dist)
+        y = sample(seq(1, n), 1, prob = dist)
+        emb[j] = y
+    } else {
+        emb[j] = sample(seq(1:n), 1)
+        print('Glauber move rejected') # Won't happen once valid embedding is established
+    }
+    
+    return(emb)
+    
+}  
+
+cond_hom_filt = function(novel, B, C, iter, filt_lvl){
+    # computes conditional homomorphism density profile f(H,A|F) using Pivot chain time average
+    # Matrices for motifs H and F are given by C and B
+    # F = directed tree rooted at node 0
+    # iterations = number of iteration
+    # underlying network = given by A
+    # filt_lvl = number of filtration levels
+    
+    n = dim(novel)[1]
+    x0 = sample(1:n, 1)  # random initial location of RW
+    emb2 = tree_sample(novel, B, x0)  # initial sampling of tree motif F
+    hom2 = rep(0, filt_lvl)
+    
+    j = 1
+    while (j <= iter){
+        emb2 = glauber_gen_update(novel, B, emb2)
+        #J = which(C==1, arr.ind=TRUE)
+        a = 1; b = 2
+        
+        wt2 = rep(1, filt_lvl)
+        i = 1 
+        while (i <= filt_lvl){
+            wt2[i] = wt2[i] * ifelse(novel[emb2[a], emb2[b]] > (i/filt_lvl), 1, 0)
+            i = i+1
+        }
+        hom2 = cbind(hom2, wt2)
+        #  progress status
+        if ((100*j/iter)%%1==0){
+            print(round(100*(j/iter)%%1))
+        }
+        j = j+1
+    }
+    # construct density profiles of filtration
+    y2 = apply(hom2, 1, mean)  
+    return(y2)
+}
+
+chdp_path = function(novel, iter, filt_lvl, k1, k2){
+    # Specify matrices A, B, C here and 
+    # draw conditional homomorphism density profile f(C,A|B).
+    
+    B = path_adj(k1, k2)
+    C = B
+    
+    y2 = cond_hom_filt(novel, B, C, iter, filt_lvl)
+    return(y2)
+    
+}
+
+# main function
+
+main = function(k1, k2, novelnum){
+    
+    filt_lvl = 500
+    iter = 500
+    
+    novel = read.table(paste("dataset/", books[novelnum,4], ".txt", sep=""))
+    novel = novel/max(novel)
+    
+    x = seq(0,filt_lvl-1)/filt_lvl
+    
+    if (k1 == 0 & k2 == 0){ # exact
+        y = chdp_path_exact(novel, filt_lvl, k1, k2)
+        return(data.frame(x, y))
+    } else { # MCMC
+        y = chdp_path(novel, iter, filt_lvl, k1, k2)
+        return(data.frame(x,y))
+    }
+    
+}
+
+```
+
+```{r, echo = TRUE, results = 'hide'}
+novelname = "Emma"
+k1 = 0; k2 = 0
+
+books = read.csv("dataset/WAN_list.csv", header = TRUE)
+novelnum = which(books[,3] %in% novelname)
+
+result = main(k1, k2, novelnum)
+```
+
+```{r}
+if (k1 == 0 & k2 == 0) {
+  x = result[[1]]; y = result[[2]]
+  plot(x, y, cex = 0.5, col = 2, main = paste(books[novelnum,3], "by", books[novelnum,2]), 
+       cex.main = 1.2, ylab = "Density Profile", xlab = "Filtration Level")
+  legend("topright", col = 2, c("Exact"), lty = 1)
+} else {
+  x = result[[1]]; y = result[[2]]
+  plot(x, y, cex = 0.5, col = 2, main = paste(books[novelnum,3], "by", books[novelnum,2]), 
+       cex.main = 1.2, ylab = "Density Profile", xlab = "Filtration Level")
+  legend("topright", col = 2, c("Glauber"), lty = 1)   
+}
+```

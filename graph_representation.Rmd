@@ -1,11 +1,11 @@
 ---
 title: "Graph Representation"
+author: "Joowon Lee"
 output: pdf_document
 ---
 
-
-    In this note, we implement one type of graph visualization. Due to the size 
-    of the graph, we plot the largest connected component of the full graph.
+In this note, we implement one type of graph visualization. Due to the size 
+of the graph, we plot the largest connected component of the full graph.
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
