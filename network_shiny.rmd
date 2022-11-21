@@ -1,0 +1,81 @@
+---
+title: "network_shiny"
+output: html_document
+date: "2022-11-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r}
+library(shiny)
+library(igraph)
+library(networkD3)
+
+### The function to plot networks interactively.
+
+plot.net <- function(net, labels = 1, size = 1) {
+  net.D3 <- igraph_to_networkD3(net)
+  net.D3$links$value <- get.edge.attribute(net)$weight
+  net.D3$nodes$group <- labels
+  net.D3$nodes$size <- size
+  forceNetwork(Links = net.D3$links,
+               Nodes = net.D3$nodes,
+               Source = "source",
+               Target = "target",
+               Value = "value",
+               NodeID = "name",
+               Nodesize = "size",
+               Group = "group",
+               
+               fontSize = 30,    
+               linkColour = "black",    
+               charge = -250,     
+               opacity = 0.9,
+               legend = T,    
+               arrows = T,    
+               bounded = F,    
+               zoom = T    
+  )
+}
+
+
+### Defines the app
+ui <- fluidPage(
+  titlePanel("Network of functional words"),
+  selectInput(
+    "selectDataset",
+    label = "Dataset",
+    choices = c("austen_2", "austen_4", "dickens_1", "dickens_4", "shakespeare_1", "shakespeare_5", "twain_1", "twain_4"),
+    multiple = F
+  ),
+  forceNetworkOutput("network", height = "1000px")
+)
+
+server <- function(input, output) {
+  net <- reactive({
+    filePath <- paste0("./dataset/", input$selectDataset , ".txt")
+    word_list = read.table("./dataset/functionwords_list.txt", head=FALSE)
+    word_list <- as.matrix(word_list)
+
+    book = read.table(filePath, head=FALSE)
+    colnames(book) = word_list
+    row.names(book) = word_list
+    book <-t(apply(book,1, function(x) if (max(x)==0) x else x/max(x)))
+    book <- as.matrix(book)
+    idx <- (rowSums(book) != 0) & (colSums(book) != 0)
+    book <- book[idx, idx]
+    book_g <- graph_from_adjacency_matrix(book, mode = "directed", weight = T)
+    list(book, book_g)
+  })
+  
+  output$network <- renderForceNetwork(plot.net(net()[[2]], size = rowSums(net()[[1]]) + colSums(net()[[1]])))
+}
+
+shinyApp(ui, server)
+```
+
+

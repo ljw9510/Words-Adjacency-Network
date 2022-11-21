@@ -1,0 +1,43 @@
+---
+title: "Graph Representation"
+author: "Joowon Lee"
+output: pdf_document
+---
+
+In this note, we implement one type of graph visualization. Due to the size 
+of the graph, we plot the largest connected component of the full graph.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(tidygraph)
+library(ggraph)
+library(igraph)
+```
+
+```{r}
+word_list = read.table("dataset/functionwords_list.txt", head=FALSE)
+word_list = as.matrix(word_list)
+
+book = read.table("dataset/austen_2.txt", head=FALSE)
+book = as.matrix(book)
+rownames(book) = colnames(book) = word_list
+
+g = graph_from_adjacency_matrix(book, weighted = TRUE)
+
+# choose nodes with largest connected component
+clu <- components(g)
+#clu$csize
+g2 = delete_vertices(g, V(g)[clu$membership!=1])
+G = as_tbl_graph(g2, edges = edge)
+```
+
+```{r, fig.width = 4, fig.height = 4}
+V(G)$degree = degree(G, mode = "total")
+G2 = G %>% activate(edges) %>% mutate(weight = log(weight)) 
+ggraph(G2, "stress") +
+  geom_edge_link(aes(width = weight), alpha = 0.25, color = "lightblue", show.legend = FALSE) +
+  geom_node_point(size = 2, col = "white") +
+  geom_node_point(size = 2, aes(alpha = degree), col = "red", show.legend = FALSE) +
+  theme_void()
+```
