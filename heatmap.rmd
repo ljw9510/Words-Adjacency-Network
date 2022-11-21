@@ -48,7 +48,7 @@ book_fullnames = c("Jane Austen, Emma",
 
 
 ```{r}
-i = 8
+i = 1
 book_name = paste0("./dataset/", book_names[i], ".txt")
 book = read.table(book_name, head=FALSE)
 colnames(book) = word_list
@@ -65,9 +65,9 @@ ggraph(book, layout = "matrix") +
   geom_edge_tile() +
   coord_fixed() +
   ggtitle(book_fullnames[i])
-  #title(book_fullnames[i])
-  #geom_node_text(aes(label = word_list), x = -1, nudge_y = 0.5) +
-  #geom_node_text(aes(label = word_list), y = -1, nudge_x = -0.5)
+
+  # geom_node_text(aes(label = word_list), x = -1, nudge_y = 0.5) +
+  # geom_node_text(aes(label = word_list), y = -1, nudge_x = -0.5)
 ```
 
 ```{r}
