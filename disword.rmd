@@ -1,0 +1,136 @@
+---
+title: "disword"
+output: html_document
+date: '2022-12-09'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(highcharter)
+library(corrplot)
+library(heatmaply)
+library(tidyverse)
+library(jsonlite)
+library(tidygraph)
+library(ggraph)
+library(philentropy)
+theme_set(theme_bw())
+```
+
+```{r}
+word_list = read.table("./dataset/functionwords_list.txt", head=FALSE)
+word_list <- as.matrix(word_list)
+```
+
+```{r}
+book_names = c("austen_2", 
+               "austen_4", 
+               "dickens_1", 
+               "dickens_4",
+               "shakespeare_1",
+               "shakespeare_5",
+               "twain_1",
+               "twain_4")
+
+book_fullnames = c("Jane Austen, Emma",
+                   "Jane Austen, Pride and Prejudice",
+                   "Charles Dickens, A Christmas Carol",
+                   "Charles Dickens, Oliver Twist",
+                   "William Shakespeare, Hamlet",
+                   "William Shakespeare, Romeo and Juliet",
+                   "Mark Twain, Adventures of Huckleberry Finn",
+                   "Mark Twain, The Adventures of Tom Sawyer")
+```
+
+```{r}
+read_book <- function(i){
+  book = read.table(paste0("./dataset/", book_names[i], ".txt"), head=FALSE)
+  colnames(book) = word_list
+  row.names(book) = word_list
+  # book <- data.frame(t(apply(book, 1, function(x) if (max(x)==0) x else x/sum(x))))
+  # book <- as.matrix(book)
+  return(book)
+}
+```
+
+```{r}
+books = list(data.frame(read_book(1)+read_book(2)),
+             data.frame(read_book(3)+read_book(4)),
+             data.frame(read_book(5)+read_book(6)),
+             data.frame(read_book(7)+read_book(8)))
+
+n = length(word_list)
+xn = as.matrix(rep(1/n, n))
+
+for (i in 1:4){
+  books[[i]] = data.frame(t(apply(books[[i]], 1, function(x) if (max(x)==0) x else x/sum(x))))
+  for (j in 1:n){
+    if (sum(books[[i]][j,]) == 0 ){
+      books[[i]][j,] = xn
+    }
+  }
+}
+```
+
+
+```{r}
+a = books[[4]]
+```
+
+
+```{r}
+KLD <- function(x,y){
+  if (length(x) != length(y)){
+    print("Different length!")
+    return (0)
+  }
+  print(x)
+  print(y)
+  ce = sum(x*log(x/y))
+  return(ce)
+}
+```
+
+
+```{r}
+# dws: divergence of words, the larger it is, the more discriminative the word is in distinguish authors
+
+dws = rep(0, n)
+for (w in 1:n){
+  for (k in 1:3){
+    for (l in (k+1):4){
+      # ce = KLD(books[[k]][w,], books[[l]][w,])
+      x = as.matrix(books[[k]][w,])
+      y = as.matrix(books[[l]][w,])
+
+      kld = KL(rbind(x, y), unit="log")
+      dws[w] = dws[w] + kld
+    }
+  }
+}
+```
+
+```{r}
+plot(dws)
+```
+```{r}
+hist(dws)
+```
+
+
+
+```{r}
+dws_mask = dws>30
+word_list[dws_mask]
+```
+
+```{r}
+book = books[[1]]
+b = book[dws_mask, dws_mask]
+```
+
+
