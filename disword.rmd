@@ -126,6 +126,7 @@ hist(dws)
 ```{r}
 dws_mask = dws>30
 word_list[dws_mask]
+save(dws_mask, file = "dws_mask.R")
 ```
 
 ```{r}
