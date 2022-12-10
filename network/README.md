@@ -1,4 +1,4 @@
-These files create force networks for functional words. 
+These files create force networks for discriminative functional words selected by the object `dws_mask.R`. 
 
 `network.rmd` contains the code creating a force network for a given book.
 
