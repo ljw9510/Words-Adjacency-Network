@@ -1,0 +1,117 @@
+library(shiny)
+library(tidyverse)
+library(hrbrthemes)
+library(circlize)
+library(kableExtra)
+library(viridis)
+library(igraph)
+library(ggraph)
+library(colormap)
+
+.plot <- function(book) {
+  # Transform the adjacency matrix in a long format
+  connect <- as.data.frame(book) %>%              
+    rownames_to_column %>%                          
+    gather(key = 'key', value = 'value', -rowname) %>%
+    filter(value == 1)
+  colnames(connect) <- c("from", "to", "value")
+  
+  # Number of connection per person
+  c( as.character(connect$from), as.character(connect$to)) %>%
+    as.tibble() %>%
+    group_by(value) %>%
+    summarize(n=n()) -> coauth
+  colnames(coauth) <- c("name", "n")
+  
+  # Create a graph object with igraph
+  mygraph <- graph_from_data_frame( connect, vertices = coauth, directed = FALSE )
+  
+  # Find community
+  com <- walktrap.community(mygraph)
+  
+  #Reorder dataset and make the graph
+  coauth <- coauth %>% 
+    mutate( grp = com$membership) %>%
+    arrange(grp) %>%
+    mutate(name=factor(name, name))
+  
+  # keep only 10 first communities
+  coauth <- coauth %>% 
+    filter(grp<16)
+  
+  # keep only this people in edges
+  connect <- connect %>%
+    filter(from %in% coauth$name) %>%
+    filter(to %in% coauth$name)
+  
+  # Add label angle
+  number_of_bar=nrow(coauth)
+  coauth$id = seq(1, nrow(coauth))
+  angle= 360 * (coauth$id-0.5) /number_of_bar     # I substract 0.5 because the letter must have the angle of the center of the bars. Not extreme right(1) or extreme left (0)
+  coauth$hjust <- ifelse(angle > 90 & angle<270, 1, 0)
+  coauth$angle <- ifelse(angle > 90 & angle<270, angle+180, angle)
+  
+  # Create a graph object with igraph
+  mygraph <- graph_from_data_frame( connect, vertices = coauth, directed = FALSE )
+  
+  # prepare a vector of n color in the viridis scale
+  mycolor <- colormap(colormap=colormaps$viridis, nshades=max(coauth$grp))
+  mycolor <- sample(mycolor, length(mycolor))
+  
+  # Make the graph
+  g <- ggraph(mygraph, layout="circle") + 
+    geom_edge_link(edge_colour="black", edge_alpha=0.2, edge_width=0.3, fold=FALSE) +
+    geom_node_point(aes(size=n, color=as.factor(grp), fill=grp), alpha=0.9) +
+    scale_size_continuous(range=c(0.5,8)) +
+    scale_color_manual(values=mycolor) +
+    geom_node_text(aes(label=paste("    ",name,"    "), angle=angle, hjust=hjust), size=2.3, color="black") +
+    theme_void() +
+    theme(
+      legend.position="none",
+      plot.margin=unit(c(0,0,0,0), "null"),
+      panel.spacing=unit(c(0,0,0,0), "null")
+    ) +
+    expand_limits(x = c(-1.2, 1.2), y = c(-1.2, 1.2)) 
+  return(g)
+}
+
+function(input, output) {
+  net <- reactive({
+    book_names = c("austen_2", 
+                   "austen_4", 
+                   "dickens_1", 
+                   "dickens_4",
+                   "shakespeare_1",
+                   "shakespeare_5",
+                   "twain_1",
+                   "twain_4")
+    
+    book_fullnames = c("Jane Austen, Emma",
+                       "Jane Austen, Pride and Prejudice",
+                       "Charles Dickens, A Christmas Carol",
+                       "Charles Dickens, Oliver Twist",
+                       "William Shakespeare, Hamlet",
+                       "William Shakespeare, Romeo and Juliet",
+                       "Mark Twain, Adventures of Huckleberry Finn",
+                       "Mark Twain, The Adventures of Tom Sawyer")
+    filePath <- paste0("./dataset/", book_names[book_fullnames == input$selectDataset] , ".txt")
+    word_list = read.table("./dataset/functionwords_list.txt", head=FALSE)
+    word_list <- as.matrix(word_list)
+    
+    book = read.table(filePath, head=FALSE)
+    colnames(book) = word_list
+    row.names(book) = word_list
+    diag(book) <- 0
+    book <-t(apply(book,1, function(x) if (max(x)==0) x else x/max(x)))
+    book <- as.matrix(book)
+    idx <- (rowSums(book) != 0) | (colSums(book) != 0)
+    book <- book[idx, idx]
+    # Transform to UU case
+    book <- book + t(book)
+    view(book)
+    book <- ifelse(book > 0.5, 1, 0) 
+  })
+  
+  output$chord<- renderPlot(.plot(net()))
+}
+
