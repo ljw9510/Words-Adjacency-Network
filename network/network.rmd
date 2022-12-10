@@ -1,0 +1,78 @@
+---
+title: "network"
+output: html_document
+date: "2022-11-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load the dataset.
+
+```{r 1}
+word_list = read.table("./dataset/functionwords_list.txt", head=FALSE)
+word_list <- as.matrix(word_list)
+
+book = read.table("./dataset/austen_2.txt", head=FALSE)   # Change the dataset here
+colnames(book) = word_list
+row.names(book) = word_list
+```
+
+Prepare the adjacent matrix.
+
+```{r 2}
+# Remove less important words
+load("dws_mask.R")
+book <- book[dws_mask, dws_mask]
+
+# Remove cycles
+diag(book) <- 0
+
+# Normalization
+book <-t(apply(book,1, function(x) if (max(x)==0) x else 3 * x/max(x)))
+book <- as.matrix(book)
+
+# Remove isolated nodes
+idx <- (rowSums(book) != 0) | (colSums(book) != 0)
+book <- book[idx, idx]
+```
+
+The function to plot networks interactively.
+
+```{r 3}
+plot.net <- function(net, labels = 1, size = 1) {
+  library(igraph, quietly = T)
+  library(networkD3, quietly = T)
+  net.D3 <- igraph_to_networkD3(net)
+  net.D3$links$value <- get.edge.attribute(net)$weight
+  net.D3$nodes$group <- labels
+  net.D3$nodes$size <- size
+  forceNetwork(Links = net.D3$links,
+               Nodes = net.D3$nodes,
+               Source = "source",
+               Target = "target",
+               Value = "value",
+               NodeID = "name",
+               Nodesize = "size",
+               Group = "group",
+               
+               fontSize = 30,    
+               linkColour = "black",    
+               charge = -250,     
+               opacity = 0.9,
+               legend = T,    
+               arrows = T,    
+               bounded = F,    
+               zoom = T    
+  )
+}
+```
+
+Draw the plot.
+
+```{r 4}
+library(igraph, quietly = T)
+book_g <- graph_from_adjacency_matrix(book, mode = "directed", weight = T)
+plot.net(book_g, size = 5 * (rowSums(book) + colSums(book)))
+```
