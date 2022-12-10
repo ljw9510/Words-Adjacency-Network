@@ -1,4 +1,4 @@
-These files create word cloud for discriminative functional words **selected by the object** `dws_mask.R`. 
+These files create word cloud for discriminative functional words <u>**selected by the object**</u> `dws_mask.R`. 
 
 `wordcloud.rmd` contains the code creating a word cloud for a given book.
 
