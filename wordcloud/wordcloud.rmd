@@ -1,0 +1,52 @@
+---
+title: "worldcloud"
+output: html_document
+date: "2022-11-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load the dataset.
+
+```{r 1}
+word_list = read.table("./dataset/functionwords_list.txt", head=FALSE)
+word_list <- as.matrix(word_list)
+
+book = read.table("./dataset/austen_2.txt", head=FALSE)
+colnames(book) = word_list
+row.names(book) = word_list
+```
+
+Prepare the adjacent matrix.
+
+```{r 2}
+# Remove less important words
+load("dws_mask.R")
+book <- book[dws_mask, dws_mask]
+
+# Remove cycles
+diag(book) <- 0
+
+# Normalization
+# book <-t(apply(book,1, function(x) if (max(x)==0) x else 3 * x/max(x)))
+book <- as.matrix(book)
+
+# Remove isolated nodes
+idx <- (rowSums(book) != 0) | (colSums(book) != 0)
+book <- book[idx, idx]
+```
+
+Create the word cloud.
+
+```{r 3}
+book_freq <- rowSums(book)
+library(wordcloud)
+names(book_freq)
+set.seed(1234) # for reproducibility 
+wordcloud(words = names(book_freq), freq = book_freq, min.freq = 1, max.words=200, random.order=FALSE, rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+```
+
+
+
