@@ -1,0 +1,109 @@
+---
+title: "3D_shinyapp"
+author: "Jonquil Liao"
+date: "2022-12-08"
+output: html_document
+---
+```{r}
+library(plotly)
+library(shiny)
+books <- read.csv("WAN_list.csv", header = TRUE)
+words <- as.matrix(read.table('functionwords_list.txt'))[1,1:211]
+draw_3D_novel <- function(novelnum){
+  novel <- read.table(paste(books[novelnum,4], ".txt", sep=""))
+  row_sum <- as.matrix(novel) %*% rep(1,211)
+  novel <- novel[order(row_sum,decreasing = T),]
+  row_name <- words[order(row_sum,decreasing = T)]
+  col_sum <- t(rep(1,211)) %*% as.matrix(novel)
+  novel <- novel[,order(col_sum,decreasing = T)]
+  col_name <- words[order(col_sum,decreasing = T)]
+  novel <- as.matrix(log(novel + 1)) ## made a log on the adjacency matrix
+  return(list(novel,row_name,col_name))
+}
+
+
+##################Can select a total of four books from the check box menu.
+ui <- fluidPage(
+  checkboxGroupInput("Novel", "Choose Four books:",
+                           c("Emma by Jane Austen" = "Emma",
+                             "Pride and Prejudice by Jane Austen" = "Pride and Prejudice",
+                             "A Christmas Carol by Charles Dickens" = "A Christmas Carol",
+                             "Oliver Twist  by Charles Dickens" = "Oliver Twist",
+                             "Hamlet by Shakespear" = "Hamlet",
+                             "Romeo and Juliet by Shakespear" = "Romeo and Juliet",
+                             "Adventures of Huckleberry Finn by Mark Twain" = "Adventures of Huckleberry Finn",
+                             "The Adventures of Tom Sawyer by Mark Twain" = "The Adventures of Tom Sawyer"
+                      ), selected = c("Emma","Pride and Prejudice","A Christmas Carol","Oliver Twist")),
+  actionButton("Change", "Update"),
+  plotlyOutput("graph")
+)
+#######################The 3D plot can drag and zoom
+server <- function(input, output, session){
+
+  output$graph <- renderPlotly({
+    input$Change
+    novelname <- isolate(input$Novel)
+    novelnum <- which(books[,3] %in% novelname)
+
+    # axx <- list(
+    # gridcolor='rgb(255, 255, 255)',
+    # zerolinecolor='rgb(255, 255, 255)',
+    # showbackground=TRUE,
+    # backgroundcolor='rgb(230, 230,230)'
+    # )
+    
+    axx <- list(
+    title = "Function words"
+    )
+
+    axy <- list(
+    title = "Function words"
+    )
+
+    axz <- list(
+    title = "Logarithm of adjacency matrix"
+    )
+    c1 <- draw_3D_novel(novelnum[1])
+    fig1 <- plot_ly(x =~c1[[2]], y = ~c1[[3]],  z = ~c1[[1]], scene='scene1') 
+    fig1 <- fig1 %>% add_surface(showscale=FALSE)
+    c2 <- draw_3D_novel(novelnum[2])
+    fig2 <- plot_ly(x =~c2[[2]], y = ~c2[[3]],  z = ~c2[[1]], scene='scene2') 
+    fig2 <- fig2 %>% add_surface(showscale=FALSE)
+    c3 <- draw_3D_novel(novelnum[3])
+    fig3 <- plot_ly(x =~c3[[2]], y = ~c3[[3]],  z = ~c3[[1]], scene='scene3') 
+    fig3 <- fig3 %>% add_surface(showscale=FALSE)
+    c4 <- draw_3D_novel(novelnum[4])
+    fig4 <- plot_ly(x =~c4[[2]], y = ~c4[[3]],  z = ~c4[[1]], scene='scene4') 
+    fig4 <- fig4 %>% add_surface(showscale=FALSE)
+
+# subplot and define scene
+    fig <- subplot(fig1, fig2, fig3, fig4,nrows = 2, margin = 0.06) 
+    fig <- fig %>% layout(title = "3D visualizations of adjacency matrices of function words",
+             scene = list(domain=list(x=c(0,0.25),y=c(0,1)),
+                          xaxis=axx, yaxis=axy, zaxis=axz,
+                          aspectmode='cube'),
+             scene2 = list(domain=list(x=c(0.25,0.5),y=c(0,1)),
+                           xaxis=axx, yaxis=axy, zaxis=axz,
+                           aspectmode='cube'),
+             scene3 = list(domain=list(x=c(0.5,0.75),y=c(0,1)),
+                           xaxis=axx, yaxis=axy, zaxis=axz,
+                           aspectmode='cube'),
+             scene4 = list(domain=list(x=c(0.75,1),y=c(0,1)),
+                           xaxis=axx, yaxis=axy, zaxis=axz,
+                           aspectmode='cube'),
+            annotations = list(
+                          list(x = 0.125 , y = 1.00, text = paste0(novelname[1]), 
+                               showarrow = F),
+                          list(x = 0.375 , y = 1.00, text = paste0(novelname[2]), 
+                               showarrow = F, xref='paper', yref='paper'),
+                          list(x = 0.625 , y = 1.00, text = paste0(novelname[3]), 
+                               showarrow = F, xref='paper', yref='paper'),
+                          list(x = 0.875 , y = 1.00, text = paste0(novelname[4]), 
+                               showarrow = F, xref='paper', yref='paper'))
+    )
+  })
+}
+
+shinyApp(ui, server)
+```
+
