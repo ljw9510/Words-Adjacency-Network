@@ -1,3 +1,4 @@
-### Word adjacency network analysis
+### Function Words Adjacency Network analysis
 
-https://joowon-lee.shinyapps.io/MyBook/
+https://joowonlee.shinyapps.io/WANvisualization/
+
