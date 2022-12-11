@@ -9,7 +9,7 @@ https://joowonlee.shinyapps.io/WANvisualization/
   
 2. Subnetwork visualization 
 
-- Reduced dimensionality of networks using author-discriminative nodes
+: Reduced dimensionality of networks using author-discriminative nodes
 
   - interactive adjacency matrix
   - interactive node-link
