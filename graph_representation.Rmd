@@ -8,36 +8,71 @@ In this note, we implement one type of graph visualization. Due to the size
 of the graph, we plot the largest connected component of the full graph.
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, fig.width = 4, fig.height = 4)
 library(tidyverse)
 library(tidygraph)
 library(ggraph)
 library(igraph)
+library(gridExtra)
 ```
 
 ```{r}
 word_list = read.table("dataset/functionwords_list.txt", head=FALSE)
 word_list = as.matrix(word_list)
+books = read.csv("dataset/WAN_list.csv", header = TRUE)
 
-book = read.table("dataset/austen_2.txt", head=FALSE)
-book = as.matrix(book)
-rownames(book) = colnames(book) = word_list
-
-g = graph_from_adjacency_matrix(book, weighted = TRUE)
-
-# choose nodes with largest connected component
-clu <- components(g)
-#clu$csize
-g2 = delete_vertices(g, V(g)[clu$membership!=1])
-G = as_tbl_graph(g2, edges = edge)
+make_network_visualization = function(novelname){
+  
+  novelnum = which(books[,3] %in% novelname)
+  book = read.table(paste("dataset/", books[novelnum,4], ".txt", sep=""), head = FALSE)
+  book = as.matrix(book)
+  rownames(book) = colnames(book) = word_list
+  
+  g = graph_from_adjacency_matrix(book, weighted = TRUE)
+  
+  # choose nodes with largest connected component
+  clu <- components(g)
+  #clu$csize
+  g2 = delete_vertices(g, V(g)[clu$membership!=1])
+  G = as_tbl_graph(g2, edges = edge)
+  
+  V(G)$degree = degree(G, mode = "total")
+  G2 = G %>% activate(edges) %>% mutate(weight = log(weight)) 
+  p = ggraph(G2, "stress") +
+    geom_edge_link(aes(width = weight), alpha = 0.25, color = "lightblue", show.legend = FALSE) +
+    geom_node_point(size = 2, col = "white") +
+    geom_node_point(size = 2, aes(alpha = degree), col = "red", show.legend = FALSE) +
+    theme_void() +
+    labs(title = books[novelnum,3], 
+         subtitle = books[novelnum,2]) +
+    theme(plot.title=element_text(size=20, 
+                                    face="bold", 
+                                    family="American Typewriter",
+                                    color="tomato",
+                                    hjust=0.5,
+                                    lineheight=1.2),
+          plot.subtitle=element_text(size=15, 
+                                     family="American Typewriter",
+                                     face="bold",
+                                     hjust=0.5))  # subtitle
+  p
+}
 ```
 
-```{r, fig.width = 4, fig.height = 4}
-V(G)$degree = degree(G, mode = "total")
-G2 = G %>% activate(edges) %>% mutate(weight = log(weight)) 
-ggraph(G2, "stress") +
-  geom_edge_link(aes(width = weight), alpha = 0.25, color = "lightblue", show.legend = FALSE) +
-  geom_node_point(size = 2, col = "white") +
-  geom_node_point(size = 2, aes(alpha = degree), col = "red", show.legend = FALSE) +
-  theme_void()
+```{r, fig.width = 8}
+novel_list =  c("Emma", "Pride and Prejudice",
+                "A Christmas Carol", "Oliver Twist", 
+                "Hamlet", "Romeo and Juliet",
+                "Adventures of Huckleberry Finn", "The Adventures of Tom Sawyer")
+graph_result = list()
+for (i in 1:length(novel_list)){
+  graph_result[[i]] = make_network_visualization(novel_list[i])
+}
+p = grid.arrange(graph_result[[1]], graph_result[[2]],
+             graph_result[[3]], graph_result[[4]],
+             graph_result[[5]], graph_result[[6]],
+             graph_result[[7]], graph_result[[8]],
+             ncol = 2, nrow = 4)
+p
 ```
+

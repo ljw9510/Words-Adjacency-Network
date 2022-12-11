@@ -1,0 +1,568 @@
+---
+title: "Text Analysis and Visualization"
+output: html_document
+runtime: shiny
+resource_files:
+- austen_2.txt
+- austen_4.txt
+- dickens_1.txt
+- dickens_4.txt
+- shakespeare_1.txt
+- shakespeare_5.txt
+- twain_1.txt
+- twain_4.txt
+- dataset/austen_2.txt
+- dataset/austen_4.txt
+- dataset/dickens_1.txt
+- dataset/dickens_4.txt
+- dataset/shakespeare_1.txt
+- dataset/shakespeare_5.txt
+- dataset/twain_1.txt
+- dataset/twain_4.txt
+- dataset/WAN_list.txt
+- result/CHD_00_austen_2.csv
+- result/CHD_00_austen_4.csv
+- result/CHD_00_dickens_1.csv
+- result/CHD_00_dickens_4.csv
+- result/CHD_00_shakespeare_1.csv
+- result/CHD_00_shakespeare_5.csv
+- result/CHD_00_twain_1.csv
+- result/CHD_00_twain_4.csv
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 3, fig.align = "center")
+library(tidyverse)
+library(tidygraph)
+library(ggraph)
+library(shiny)
+library(bslib)
+library(shiny)
+library(gridExtra)
+library(hrbrthemes)
+library(circlize)
+library(kableExtra)
+library(viridis)
+library(igraph)
+library(colormap)
+library(wordcloud)
+library(plotly)
+library(networkD3)
+```
+
+```{r, echo = FALSE}
+books = read.csv("dataset/WAN_list.csv", header = TRUE)
+word_list = read.table("dataset/functionwords_list.txt", head=FALSE)
+word_list = as.matrix(word_list)
+load("dws_mask.R")
+```
+
+\
+
+### Motivation
+
+The goal of this project is to obtain an effective visualization of text data from classic novels, which captures the pairwise relationships between words. For each novel $X$, we construct a network $G(X)$ called the **function words adjacency networks** (WAN for short, see [1]) whose nodes correspond to the set of function words and its edge weights correspond to a normalized frequency to see two words within the same sentence in the novel. We use various network analysis and visualization techniques to represent the corresponding WAN in a compact and informative manner, which may help to classify different authors by capturing characteristics of using function words for each author.
+
+\
+
+### Function Word Adjacency Network (WAN)
+**Function word adjacency networks** are weighted networks introduced by Segarra, Eisen, and Ribeiro [1] that encode text data for the purpose of authorship attribution. Function words represent the words that are used for a grammatical purpose and do not have any linguistic meaning on their own such as ‘the’, ‘for’, and 'a'. In  [1], the authors argued that for each writer, there is a unique characteristic of the pattern of using function words. 
+
+We use the list $L$ of $N=211$ function words used in [1]. For a given novel $X$, we first compute a $N \times N$ word frequency matrix $M(X)$ whose $(i,j)$ entry is the frequency of the $i$th function word followed by the $j$th function word within 10 consecutive words. We then let $A(X)=M(A)/\max(M(A))$, so that each entry of $A(x)$ is between 0 and 1. The function word adjacency network (WAN) for the novel $X$, is defined to be the directed and weighted network $G(X)$ with node set $L$ and weighted adjacency matrix $A(X)$, where the ordered pair $(i,j)$ of nodes is endowed with weight $A(X)(i,j)$. This procedure results in a directed weighted network $G(X)$  for each text data $X$ on the common node set $L$. 
+
+![](example.png){#id .class width=60% height=40%}
+
+\
+
+
+
+### 1. Network Visualization
+
+Here, we use two different approaches to visualize network structures: (1) adjacency matrix view, and (2) chord ring (node-link) view.
+
+```{r, echo=FALSE, warning=FALSE}
+heatmap = function(novelnum){
+  novel = read.table(paste("dataset/", books[novelnum,4], ".txt", sep=""))
+  colnames(novel) = word_list
+  row.names(novel) = word_list
+  
+  # Normalizing rows by row max
+  book <- t(apply(novel, 1, function(x) if (max(x)==0) x else x/max(x)))
+  book <- as.matrix(book)
+  
+  ggraph(book, layout = "matrix") +
+    geom_edge_tile() +
+    coord_fixed() +
+    theme_void() +
+    labs(title = books[novelnum,3], subtitle = books[novelnum,2]) +
+    theme(plot.title=element_text(size=12, 
+                                  face="bold", 
+                                  family="American Typewriter",
+                                  color="tomato",
+                                  hjust=0.5,
+                                  lineheight=1.2),
+          plot.subtitle=element_text(size=12, 
+                                     family="American Typewriter",
+                                     face="bold",
+                                     hjust=0.5))  # subtitle
+}
+
+
+chord <- function(novelnum){
+  novel = read.table(paste("dataset/", books[novelnum,4], ".txt", sep=""))
+  colnames(novel) = word_list
+  row.names(novel) = word_list
+  
+  book <-t(apply(novel, 1, function(x) if (max(x)==0) x else x/max(x)))
+  book <- as.matrix(book)
+  idx <- (rowSums(book) != 0) & (colSums(book) != 0)
+  book <- book[idx, idx]
+  # Transform to UU case
+  book <- book + t(book)
+  book <- ifelse(book > 0.5, 1, 0) 
+  
+  # Transform the adjacency matrix in a long format
+  connect <- as.data.frame(book) %>%              
+    rownames_to_column %>%                          
+    gather(key = 'key', value = 'value', -rowname) %>%
+    filter(value == 1)
+  colnames(connect) <- c("from", "to", "value")
+  
+  # Number of connection per person
+  c( as.character(connect$from), as.character(connect$to)) %>%
+    as.tibble() %>%
+    group_by(value) %>%
+    summarize(n=n()) -> coauth
+  colnames(coauth) <- c("name", "n")
+  
+  # Create a graph object with igraph
+  mygraph <- graph_from_data_frame( connect, vertices = coauth, directed = FALSE )
+  
+  # Find community
+  com <- walktrap.community(mygraph)
+  
+  #Reorder dataset and make the graph
+  coauth <- coauth %>% 
+    mutate( grp = com$membership) %>%
+    arrange(grp) %>%
+    mutate(name=factor(name, name))
+  
+  # keep only 10 first communities
+  coauth <- coauth %>% 
+    filter(grp<16)
+  
+  # keep only this people in edges
+  connect <- connect %>%
+    filter(from %in% coauth$name) %>%
+    filter(to %in% coauth$name)
+  
+  # Add label angle
+  number_of_bar=nrow(coauth)
+  coauth$id = seq(1, nrow(coauth))
+  angle= 360 * (coauth$id-0.5) /number_of_bar    
+  # I substract 0.5 because the letter must have the angle of the center of the bars. 
+  # Not extreme right(1) or extreme left (0)
+  coauth$hjust <- ifelse(angle > 90 & angle<270, 1, 0)
+  coauth$angle <- ifelse(angle > 90 & angle<270, angle+180, angle)
+  
+  # Create a graph object with igraph
+  mygraph <- graph_from_data_frame( connect, vertices = coauth, directed = FALSE )
+  
+  # prepare a vector of n color in the viridis scale
+  mycolor <- colormap(colormap=colormaps$viridis, nshades=max(coauth$grp))
+  mycolor <- sample(mycolor, length(mycolor))
+  
+  # Make the graph
+  ggraph(mygraph, layout="circle") + 
+    geom_edge_link(edge_colour="black", edge_alpha=0.2, edge_width=0.3, fold=FALSE) +
+    geom_node_point(aes(size=n, color=as.factor(grp), fill=grp), alpha=0.9) +
+    scale_size_continuous(range=c(0.5,8)) +
+    scale_color_manual(values=mycolor) +
+    geom_node_text(aes(label=paste("    ",name,"    "), angle=angle, hjust=hjust), size=2.3, color="black") +
+    theme_void() +
+    labs(title = books[novelnum,3], subtitle = books[novelnum,2]) +
+    theme(
+      legend.position="none",
+      plot.margin=unit(c(0,0,0,0), "null"),
+      panel.spacing=unit(c(0,0,0,0), "null"),
+      plot.title=element_text(size=12, 
+                              face="bold", 
+                              family="American Typewriter",
+                              color="tomato",
+                              hjust=0.5,
+                              lineheight=1.2),
+      plot.subtitle=element_text(size=12, 
+                                 family="American Typewriter",
+                                 face="bold",
+                                 hjust=0.5)) +  # subtitle 
+    expand_limits(x = c(-1.2, 1.2), y = c(-1.2, 1.2)) 
+}
+
+# shiny app
+inputPanel(checkboxGroupInput("Novel1", "Choose books:",
+                              c("Emma by Jane Austen" = "Emma",
+                                "Pride and Prejudice by Jane Austen" = "Pride and Prejudice",
+                                "A Christmas Carol by Charles Dickens" = "A Christmas Carol",
+                                "Oliver Twist  by Charles Dickens" = "Oliver Twist",
+                                "Hamlet by Shakespear" = "Hamlet",
+                                "Romeo and Juliet by Shakespear" = "Romeo and Juliet",
+                                "Adventures of Huckleberry Finn by Mark Twain" = 
+                                  "Adventures of Huckleberry Finn",
+                                "The Adventures of Tom Sawyer by Mark Twain" = 
+                                  "The Adventures of Tom Sawyer"), 
+                              selected = c("Emma", "Pride and Prejudice",
+                                           "Hamlet", "Romeo and Juliet")),
+           actionButton("Change1", "Update"))
+
+renderPlot({
+  input$Change1 # for actionButton
+  
+  novelname1 = isolate(input$Novel1)
+  novelnum1 = which(books[,3] %in% novelname1)
+  n = length(novelnum1)
+  
+  graph_result = list()
+  for (i in 1:n){
+    graph_result[[i]] = heatmap(novelnum1[i])
+  }
+  do.call(grid.arrange, c(graph_result, ncol=2))}, outputArgs = list(width = "500px", height = "500px")
+)
+
+
+renderPlot({
+  input$Change1 # for actionButton
+  
+  novelname1 = isolate(input$Novel1)
+  novelnum1 = which(books[,3] %in% novelname1)
+  n = length(novelnum1)
+  
+  graph_result2 = list()
+  for (i in 1:n){
+    graph_result2[[i]] = chord(novelnum1[i])
+  }
+  do.call(grid.arrange, c(graph_result2, ncol=2))}, outputArgs = list(width = "1000px", height = "1000px")
+)
+```
+
+
+### 2. Reduced dimensionality of networks
+
+Unfortunately, both adjacency matrix and node-link approaches do not represent function words network effectively due to its size. Alternative way to overcome this issue is to reduce dimensionality of the network.
+
+In this section, we constructed subnetworks based on some discriminative nodes, which may help us to distinguish authors. The idea to find discriminative nodes (words) is as follows. For each author, we made one adjacency network by taking average of the two novels. Then, each normalized row is regarded as one distribution for that row word, so the KL divergence between each pair of the authors can be calculated. Finally, words with the largest divergence sum are defined as discriminative words.
+
+We introduce two different approaches to visualize reduced network structures: (1) interactive adjacency matrix, and (2) interactive node-link visualization.
+
+
+```{r, echo=FALSE, warning=FALSE}
+
+draw_3D_novel <- function(novelnum){
+  novel <- read.table(paste("dataset/", books[novelnum,4], ".txt", sep=""))
+  row_sum <- as.matrix(novel) %*% rep(1,211)
+  novel <- novel[order(row_sum,decreasing = T),]
+  row_name <- words[order(row_sum,decreasing = T)]
+  col_sum <- t(rep(1,211)) %*% as.matrix(novel)
+  novel <- novel[,order(col_sum,decreasing = T)]
+  col_name <- words[order(col_sum,decreasing = T)]
+  novel <- as.matrix(log(novel + 1)) ## made a log on the adjacency matrix
+  return(list(novel,row_name,col_name))
+}
+
+# shiny app
+inputPanel(checkboxGroupInput("Novel2", "Choose four books:",
+                              c("Emma by Jane Austen" = "Emma",
+                                "Pride and Prejudice by Jane Austen" = "Pride and Prejudice",
+                                "A Christmas Carol by Charles Dickens" = "A Christmas Carol",
+                                "Oliver Twist  by Charles Dickens" = "Oliver Twist",
+                                "Hamlet by Shakespear" = "Hamlet",
+                                "Romeo and Juliet by Shakespear" = "Romeo and Juliet",
+                                "Adventures of Huckleberry Finn by Mark Twain" = 
+                                  "Adventures of Huckleberry Finn",
+                                "The Adventures of Tom Sawyer by Mark Twain" = 
+                                  "The Adventures of Tom Sawyer"), 
+                              selected = c("Emma", "Pride and Prejudice",
+                                           "Hamlet", "Romeo and Juliet")),
+           actionButton("Change2", "Update"))
+
+renderPlotly({
+  
+  input$Change2
+  novelname2 <- isolate(input$Novel2)
+  novelnum2 <- which(books[,3] %in% novelname2)
+  
+  axx <- list(
+    title = "Function words"
+  )
+  
+  axy <- list(
+    title = "Function words"
+  )
+  
+  axz <- list(
+    title = "Logarithm of adjacency matrix"
+  )
+  
+  c1 <- draw_3D_novel(novelnum2[1])
+  fig1 <- plot_ly(x =~c1[[2]], y = ~c1[[3]],  z = ~c1[[1]], scene='scene1') 
+  fig1 <- fig1 %>% add_surface(showscale=FALSE)
+  c2 <- draw_3D_novel(novelnum2[2])
+  fig2 <- plot_ly(x =~c2[[2]], y = ~c2[[3]],  z = ~c2[[1]], scene='scene2') 
+  fig2 <- fig2 %>% add_surface(showscale=FALSE)
+  c3 <- draw_3D_novel(novelnum2[3])
+  fig3 <- plot_ly(x =~c3[[2]], y = ~c3[[3]],  z = ~c3[[1]], scene='scene3') 
+  fig3 <- fig3 %>% add_surface(showscale=FALSE)
+  c4 <- draw_3D_novel(novelnum2[4])
+  fig4 <- plot_ly(x =~c4[[2]], y = ~c4[[3]],  z = ~c4[[1]], scene='scene4') 
+  fig4 <- fig4 %>% add_surface(showscale=FALSE)
+  
+  # subplot and define scene
+  fig <- subplot(fig1, fig2, fig3, fig4,nrows = 2, margin = 0.06) 
+  fig <- fig %>% layout(title = "3D visualizations of adjacency matrices of function words",
+                        scene = list(domain=list(x=c(0,0.25),y=c(0,1)),
+                                     xaxis=axx, yaxis=axy, zaxis=axz,
+                                     aspectmode='cube'),
+                        scene2 = list(domain=list(x=c(0.25,0.5),y=c(0,1)),
+                                      xaxis=axx, yaxis=axy, zaxis=axz,
+                                      aspectmode='cube'),
+                        scene3 = list(domain=list(x=c(0.5,0.75),y=c(0,1)),
+                                      xaxis=axx, yaxis=axy, zaxis=axz,
+                                      aspectmode='cube'),
+                        scene4 = list(domain=list(x=c(0.75,1),y=c(0,1)),
+                                      xaxis=axx, yaxis=axy, zaxis=axz,
+                                      aspectmode='cube'),
+                        annotations = list(
+                          list(x = 0.125 , y = 1.00, text = paste0(novelname2[1]), 
+                               showarrow = F),
+                          list(x = 0.375 , y = 1.00, text = paste0(novelname2[2]), 
+                               showarrow = F, xref='paper', yref='paper'),
+                          list(x = 0.625 , y = 1.00, text = paste0(novelname2[3]), 
+                               showarrow = F, xref='paper', yref='paper'),
+                          list(x = 0.875 , y = 1.00, text = paste0(novelname2[4]), 
+                               showarrow = F, xref='paper', yref='paper')))
+})
+```
+
+
+```{r, echo=FALSE, warning=FALSE}
+plot.net <- function(net, labels = 1, size = 1) {
+  net.D3 <- igraph_to_networkD3(net)
+  net.D3$links$value <- get.edge.attribute(net)$weight
+  net.D3$nodes$group <- labels
+  net.D3$nodes$size <- size
+  forceNetwork(Links = net.D3$links,
+               Nodes = net.D3$nodes,
+               Source = "source",
+               Target = "target",
+               Value = "value",
+               NodeID = "name",
+               Nodesize = "size",
+               Group = "group",
+               fontSize = 30,    
+               linkColour = "black",    
+               charge = -250,     
+               opacity = 0.9,
+               legend = T,    
+               arrows = T,    
+               bounded = F,    
+               zoom = T)
+}
+
+net <- function(novelnum){
+  novel = read.table(paste("dataset/", books[novelnum,4], ".txt", sep=""))
+  colnames(novel) = word_list
+  row.names(novel) = word_list
+  book <- novel[dws_mask, dws_mask]
+  diag(book) <- 0
+  book <-t(apply(book,1, function(x) if (max(x)==0) x else 3 * x/max(x)))
+  book <- as.matrix(book)
+  idx <- (rowSums(book) != 0) | (colSums(book) != 0)
+  book <- book[idx, idx]
+  book_g <- graph_from_adjacency_matrix(book, mode = "directed", weight = T)
+  list(book, book_g)
+}
+
+# shiny app
+inputPanel(selectInput("Novel3", "Choose one book:",
+                       c("Emma by Jane Austen" = "Emma",
+                         "Pride and Prejudice by Jane Austen" = "Pride and Prejudice",
+                         "A Christmas Carol by Charles Dickens" = "A Christmas Carol",
+                         "Oliver Twist  by Charles Dickens" = "Oliver Twist",
+                         "Hamlet by Shakespear" = "Hamlet",
+                         "Romeo and Juliet by Shakespear" = "Romeo and Juliet",
+                         "Adventures of Huckleberry Finn by Mark Twain" = 
+                           "Adventures of Huckleberry Finn",
+                         "The Adventures of Tom Sawyer by Mark Twain" = 
+                           "The Adventures of Tom Sawyer"), 
+                       selected = "Emma", multiple = F),
+           actionButton("Change3", "Update"))
+
+renderForceNetwork({
+  input$Change3 # for actionButton
+  
+  novelname3 = input$Novel3
+  novelnum3 = which(books[,3] == novelname3)
+  
+  temp = net(novelnum3)
+  plot.net(temp[[2]], size = 5 * (rowSums(temp[[1]]) + colSums(temp[[1]])))
+})
+```
+
+
+### 3. Reduced complexity of networks
+
+Another way to handle large networks is to reduce network complexity. Then the goal is to extract useful information from the entire network and visualize the information rather than the network itself.
+
+We introduce two methods: (1) Word cloud based on node out-degrees, and (2) Conditional Homomorphism Density Profiles (CHDP). 
+
+CHDP was proposed by Lyu et al., (2019) [2]. Given a network $G$ with node set $V$ and weighted adjacency matrix $A$, CHDP with parameter $k\ge 0$ is a function-valued observable function defined as
+\begin{align*}\label{eq:def_CHDP}
+    f_{k}(t):=\mathbb{P}\left( A(x_{0},x_{k}) > t \,\big| \, A(x_{0},x_{1})>0, \, A(x_{1},x_{2})>0,\, \dots, A(x_{k-1},x_{k})>0  \right), \quad 0\le t \le 1. 
+\end{align*}
+where $x_{1},\dots,x_{k}$ are chosen i.i.d. uniformly at random from $V$. Namely, at each `level' $t\in [0,1]$, $f_{k}(t)$ measures the probability that a random copy of $(k+1)$-walk in $G$ with node sequence $(x_{0},\dots,x_{k})$ is a cycle in $G$ and the weight $A(x_{0}, x_{k})$ is larger than $t$. As we increase $t$, such conditional probability decreases, so $f_{k}(t)$ is a decreasing function in $t$. 
+
+We plot CHDP for several choices of the parameter $k$, which corresponds to the number of edges in the walk on $(x_{0},\dots,x_{k})$ being conditioned. When $k=0$, $f_{0}(t)$ equals the probability that a uniformly randomly chosen loop has a weight larger than $t$. When $k=1$, $f_{1}(t)$ equals the probability that a uniformly randomly chosen edge has a weight larger than $t$. When $k=2$, $f_{2}(t)$ is the probability that a uniformly randomly chosen walk of two edges has an edge of weight larger than $t$ that directly connects the first and the last node in the walk. 
+
+We remark that CHDP can be effectively computed by the Markov chain Monte Carlo algorithms for `motif sampling' problems proposed in [2]. The algorithms proceed by first finding a walk of $(k+1)$ edges using rejection sampling, and then iteratively evolving the copy of the walk inside the network by using either a Gibbs sampling or Metropolis-Hastings algorithm.
+
+```{r, echo=FALSE, warning=FALSE}
+draw_wordcloud = function(novelnum, maxwords) {
+  
+  novel = read.table(paste("dataset/", books[novelnum,4], ".txt", sep=""))
+  colnames(novel) = word_list
+  row.names(novel) = word_list
+  
+  book <-t(apply(novel, 1, function(x) if (max(x)==0) x else x/max(x)))
+  book <- as.matrix(book)
+  idx <- (rowSums(book) != 0) | (colSums(book) != 0)
+  book <- book[idx, idx]
+  book_freq <- rowSums(book)
+
+  set.seed(1234) # for reproducibility 
+  #layout(matrix(c(1, 2), nrow=2), heights=c(0.5, 4))
+  #par(mar=rep(0, 4))
+  #plot.new()
+  #text(x=0.5, y=0.5, paste(books[novelnum,3], "by", books[novelnum,2]),
+  #     family = "American Typewriter", col = "tomato", cex= 2)
+  wordcloud(words = names(book_freq), freq = book_freq, 
+            min.freq = 1, max.words=maxwords, random.order=FALSE, 
+            rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+}
+
+# shiny app
+inputPanel(selectInput("Novel4", "Choose one book:",
+                       c("Emma by Jane Austen" = "Emma",
+                         "Pride and Prejudice by Jane Austen" = "Pride and Prejudice",
+                         "A Christmas Carol by Charles Dickens" = "A Christmas Carol",
+                         "Oliver Twist  by Charles Dickens" = "Oliver Twist",
+                         "Hamlet by Shakespear" = "Hamlet",
+                         "Romeo and Juliet by Shakespear" = "Romeo and Juliet",
+                         "Adventures of Huckleberry Finn by Mark Twain" = 
+                           "Adventures of Huckleberry Finn",
+                         "The Adventures of Tom Sawyer by Mark Twain" = 
+                           "The Adventures of Tom Sawyer"), 
+                       selected = "Emma", multiple = F),
+           sliderInput("nwords", "Choose maximum number of words:",
+                        min = 50, max = 200, value = 100),
+           actionButton("Change4", "Update"))
+
+renderPlot({
+  input$Change4 # for actionButton
+  maxwords = isolate(input$nwords)
+  novelname4 = isolate(input$Novel4)
+  novelnum4 = which(books[,3] == novelname4)
+  draw_wordcloud(novelnum4, maxwords)}, outputArgs = list(width = "800px", height = "800px")
+)
+```
+
+
+```{r, echo=FALSE, warning=FALSE}
+draw_chd_plot = function(novelnum, k1, k2) {
+
+  result = read.csv(paste("result/CHD_", k1, k2, "_", books[novelnum,4], ".csv", sep=""))
+  x = result$x; y = result$y
+
+  if (k1 == 0 & k2 == 0) {
+    
+    p = ggplot(result) +
+      geom_point(aes(x, y), col = "red") +
+      theme_bw() +
+      labs(title = paste(books[novelnum,3], "by", books[novelnum,2]),
+           x ="Filtration Level", y = "Density Profile",
+           subtitle = "Exact") +
+      theme(plot.title=element_text(size=12, 
+                                    face="bold", 
+                                    family="American Typewriter",
+                                    color="tomato",
+                                    hjust=0.5,
+                                    lineheight=1.2),  # title
+            plot.subtitle=element_text(size=12, 
+                                       family="American Typewriter",
+                                       face="bold",
+                                       hjust=0.5),  # subtitle
+            #plot.caption=element_text(size=15),  # caption
+            axis.title.x=element_text(size=12),  # X axis title
+            axis.title.y=element_text(size=12),  # Y axis title
+            axis.text.x=element_text(size=10, 
+                                     angle = 30),  # X axis text
+            axis.text.y=element_text(size=10))  # Y axis text
+  } else {
+    p = ggplot(result) +
+      geom_point(aes(x, y), col = "red") +
+      theme_bw() +
+      labs(title = paste(books[novelnum,3], "by", books[novelnum,2]),
+           x ="Filtration Level", y = "Density Profile",
+           subtitle = paste("Glauber (k = ", k1+k2, ")", sep = "")) +
+      theme(plot.title=element_text(size=12, 
+                                    face="bold", 
+                                    family="American Typewriter",
+                                    color="tomato",
+                                    hjust=0.5,
+                                    lineheight=1.2),  # title
+            plot.subtitle=element_text(size=12, 
+                                       family="American Typewriter",
+                                       face="bold",
+                                       hjust=0.5),  # subtitle
+            #plot.caption=element_text(size=15),  # caption
+            axis.title.x=element_text(size=12),  # X axis title
+            axis.title.y=element_text(size=12),  # Y axis title
+            axis.text.x=element_text(size=10, 
+                                     angle = 30),  # X axis text
+            axis.text.y=element_text(size=10))  # Y axis text
+  }  
+  p  
+}
+# shiny app
+inputPanel(checkboxGroupInput("Novel5", "Choose four books:",
+                              c("Emma by Jane Austen" = "Emma",
+                                "Pride and Prejudice by Jane Austen" = "Pride and Prejudice",
+                                "A Christmas Carol by Charles Dickens" = "A Christmas Carol",
+                                "Oliver Twist  by Charles Dickens" = "Oliver Twist",
+                                "Hamlet by Shakespear" = "Hamlet",
+                                "Romeo and Juliet by Shakespear" = "Romeo and Juliet",
+                                "Adventures of Huckleberry Finn by Mark Twain" = 
+                                  "Adventures of Huckleberry Finn",
+                                "The Adventures of Tom Sawyer by Mark Twain" = 
+                                  "The Adventures of Tom Sawyer"), 
+                              selected = c("Emma", "Pride and Prejudice",
+                                           "Hamlet", "Romeo and Juliet")),
+           numericInput("Left", "Left.Length (0~2):", 0, min = 0, max = 2),
+           numericInput("Right", "Right.Length (0~2):", 0, min = 0, max = 2),
+           actionButton("Change5", "Update"))
+
+renderPlot({
+  
+  input$Change5 # for actionButton
+  
+  k1 = isolate(input$Left)
+  k2 = isolate(input$Right)
+  novelname5 = isolate(input$Novel5)
+  novelnum5 = which(books[,3] %in% novelname5)
+  n5 = length(novelnum5)
+  
+  graph_result5 = list()
+  for (i in 1:n5){
+    graph_result5[[i]] = draw_chd_plot(novelnum5[i], k1, k2)
+  }
+  do.call(grid.arrange, c(graph_result5, ncol=2))}, outputArgs = list(width = "800px", height = "800px")
+)
+```

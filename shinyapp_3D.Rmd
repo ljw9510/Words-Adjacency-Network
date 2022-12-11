@@ -7,6 +7,7 @@ output: html_document
 ```{r}
 library(plotly)
 library(shiny)
+
 books <- read.csv("WAN_list.csv", header = TRUE)
 words <- as.matrix(read.table('functionwords_list.txt'))[1,1:211]
 draw_3D_novel <- function(novelnum){

@@ -1,0 +1,13 @@
+name: WANvisualization
+title: WANvisualization
+username:
+account: joowonlee
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 7866479
+bundleId: 6622888
+url: https://joowonlee.shinyapps.io/WANvisualization/
+when: 1670758107.70306
+lastSyncTime: 1670758107.70306
+asMultiple: FALSE
+asStatic: FALSE

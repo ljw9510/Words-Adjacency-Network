@@ -92,9 +92,9 @@ chdp_gen_exact = function(novel, B, C, filt_lvl){
             m = m+1
         }
         #  progress status
-        if ((100*lvl/filt_lvl)%%1==0){
-            print(round(100*(lvl/filt_lvl)%%1))
-        }
+        #if ((100*lvl/filt_lvl)%%1==0){
+        #    print(round(100*(lvl/filt_lvl)%%1))
+        #}
         lvl = lvl + 1
     }
     return(hd_cycle_filt/hd_path)
@@ -138,7 +138,7 @@ tree_sample = function(novel, B, x) {
             y = sample(seq(1, n), 1, prob = dist)
         } else{
             y = emb[j]
-            print('path_sample_failed:isolated')
+            #print('path_sample_failed:isolated')
         }
         emb = c(emb, y)
         i = i+1
@@ -176,7 +176,7 @@ glauber_gen_update = function(novel, B, emb){
         emb[j] = y
     } else {
         emb[j] = sample(seq(1:n), 1)
-        print('Glauber move rejected') # Won't happen once valid embedding is established
+        #print('Glauber move rejected') # Won't happen once valid embedding is established
     }
     
     return(emb)
@@ -210,9 +210,9 @@ cond_hom_filt = function(novel, B, C, iter, filt_lvl){
         }
         hom2 = cbind(hom2, wt2)
         #  progress status
-        if ((100*j/iter)%%1==0){
-            print(round(100*(j/iter)%%1))
-        }
+        #if ((100*j/iter)%%1==0){
+        #    print(round(100*(j/iter)%%1))
+        #}
         j = j+1
     }
     # construct density profiles of filtration
@@ -267,15 +267,99 @@ result = main(k1, k2, novelnum)
 ```
 
 ```{r}
-if (k1 == 0 & k2 == 0) {
-  x = result[[1]]; y = result[[2]]
-  plot(x, y, cex = 0.5, col = 2, main = paste(books[novelnum,3], "by", books[novelnum,2]), 
-       cex.main = 1.2, ylab = "Density Profile", xlab = "Filtration Level")
-  legend("topright", col = 2, c("Exact"), lty = 1)
-} else {
-  x = result[[1]]; y = result[[2]]
-  plot(x, y, cex = 0.5, col = 2, main = paste(books[novelnum,3], "by", books[novelnum,2]), 
-       cex.main = 1.2, ylab = "Density Profile", xlab = "Filtration Level")
-  legend("topright", col = 2, c("Glauber"), lty = 1)   
+# for fast plotting, create result file
+novel_list =  c("Emma", "Pride and Prejudice",
+                "A Christmas Carol", "Oliver Twist", 
+                "Hamlet", "Romeo and Juliet",
+                "Adventures of Huckleberry Finn", "The Adventures of Tom Sawyer")
+novel_list_num = which(books[,3] %in% novel_list)
+
+for (i in 0:2){
+  for (j in 0:2){
+    for (novelnum in novel_list_num){
+      print(c(i, j, novelnum))
+      result = main(k1 = i, k2 = j, novelnum = novelnum)
+      write.csv(result, paste("result/CHD_", i, j, "_", books[novelnum,4], ".csv", sep=""), row.names = F)
+    }
+  }
 }
 ```
+
+```{r, fig.width = 3, fig.height = 3}
+#  plot CHD profile
+novelname = "Emma"
+k1=0;k2=0
+
+draw_chd_plot = function(novelname, k1, k2) {
+
+  novelnum = which(books[,3] %in% novelname)
+  result = read.csv(paste("result/CHD_", k1, k2, "_", books[novelnum,4], ".csv", sep=""))
+  x = result$x; y = result$y
+
+  if (k1 == 0 & k2 == 0) {
+    
+    p = ggplot(result) +
+      geom_point(aes(x, y), col = "red") +
+      theme_bw() +
+      labs(title = paste(books[novelnum,3], "by", books[novelnum,2]),
+           x ="Filtration Level", y = "Density Profile",
+           subtitle = "Exact") +
+      theme(plot.title=element_text(size=20, 
+                                    face="bold", 
+                                    family="American Typewriter",
+                                    color="tomato",
+                                    hjust=0.5,
+                                    lineheight=1.2),  # title
+            plot.subtitle=element_text(size=15, 
+                                       family="American Typewriter",
+                                       face="bold",
+                                       hjust=0.5),  # subtitle
+            #plot.caption=element_text(size=15),  # caption
+            axis.title.x=element_text(size=15),  # X axis title
+            axis.title.y=element_text(size=15),  # Y axis title
+            axis.text.x=element_text(size=10, 
+                                     angle = 30),  # X axis text
+            axis.text.y=element_text(size=10))  # Y axis text
+  } else {
+    
+    p = ggplot(result) +
+      geom_point(aes(x, y), col = "red") +
+      theme_bw() +
+      labs(title = paste(books[novelnum,3], "by", books[novelnum,2]),
+           x ="Filtration Level", y = "Density Profile",
+           subtitle = paste("Glauber (k = ", k1+k2, ")", sep = "")) +
+      theme(plot.title=element_text(size=20, 
+                                    face="bold", 
+                                    family="American Typewriter",
+                                    color="tomato",
+                                    hjust=0.5,
+                                    lineheight=1.2),  # title
+            plot.subtitle=element_text(size=15, 
+                                       family="American Typewriter",
+                                       face="bold",
+                                       hjust=0.5),  # subtitle
+            #plot.caption=element_text(size=15),  # caption
+            axis.title.x=element_text(size=15),  # X axis title
+            axis.title.y=element_text(size=15),  # Y axis title
+            axis.text.x=element_text(size=10, 
+                                     angle = 30),  # X axis text
+            axis.text.y=element_text(size=10))  # Y axis text
+  }  
+  p  
+}
+
+novel_list =  c("Emma", "Pride and Prejudice",
+                "A Christmas Carol", "Oliver Twist", 
+                "Hamlet", "Romeo and Juliet",
+                "Adventures of Huckleberry Finn", "The Adventures of Tom Sawyer")
+chd_plot_result = list()
+for (i in 1:length(novel_list)){
+  chd_plot_result[[i]] = draw_chd_plot(novel_list[i], k1 = 1, k2 = 1)
+}
+grid.arrange(chd_plot_result[[1]], chd_plot_result[[2]],
+             chd_plot_result[[3]], chd_plot_result[[4]],
+             chd_plot_result[[5]], chd_plot_result[[6]],
+             chd_plot_result[[7]], chd_plot_result[[8]],
+             ncol = 2, nrow = 4)
+```
+
