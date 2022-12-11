@@ -7,7 +7,7 @@ https://joowonlee.shinyapps.io/WANvisualization/
   - adjacency matrix view
   - chord ring (node-link) view
   
-2. Subnetwork visualization : Reduced dimensionality of networks using author-discriminative nodes
+2. Subnetwork visualization : Reduce dimensionality of networks using author-discriminative nodes
 
   - interactive adjacency matrix
   - interactive node-link
