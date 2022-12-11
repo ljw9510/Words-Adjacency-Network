@@ -351,8 +351,8 @@ reduced_heatmap = function(novelnum){
   diag(book) <- 0
   book <-t(apply(book,1, function(x) if (max(x)==0) x else 3 * x/max(x)))
   book <- as.matrix(book)
-  idx <- (rowSums(book) != 0) | (colSums(book) != 0)
-  book <- book[idx, idx]
+  #idx <- (rowSums(book) != 0) | (colSums(book) != 0)
+  #book <- book[idx, idx]
   
   ggraph(book, layout = "matrix") +
     geom_edge_tile() +
@@ -401,6 +401,8 @@ renderPlot({
   }
   do.call(grid.arrange, c(graph_result6, ncol=2))}, outputArgs = list(width = "500px", height = "500px")
 )
+
+novelnum6 = c(17, 36)
 ```
 
 ```{r, echo=FALSE, warning=FALSE}
