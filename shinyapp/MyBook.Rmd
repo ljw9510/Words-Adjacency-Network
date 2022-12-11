@@ -78,7 +78,7 @@ We use the list $L$ of $N=211$ function words used in [1]. For a given novel $X$
 
 ### 1. Network Visualization
 
-Here, we use two different approaches to visualize network structures: (1) adjacency matrix view, and (2) chord ring (node-link) view.
+Here, we use two different approaches to visualize network structures: (1) static/interactive adjacency matrix view, and (2) chord ring (node-link) view.
 
 ```{r, echo=FALSE, warning=FALSE}
 heatmap = function(novelnum){
@@ -240,22 +240,11 @@ renderPlot({
   for (i in 1:n){
     graph_result2[[i]] = chord(novelnum1[i])
   }
-  do.call(grid.arrange, c(graph_result2, ncol=2))}, outputArgs = list(width = "1000px", height = "1000px")
+  do.call(grid.arrange, c(graph_result2, ncol=2))}, outputArgs = list(width = "800px", height = "800px")
 )
 ```
 
-
-### 2. Reduced dimensionality of networks
-
-Unfortunately, both adjacency matrix and node-link approaches do not represent function words network effectively due to its size. Alternative way to overcome this issue is to reduce dimensionality of the network.
-
-In this section, we constructed subnetworks based on some discriminative nodes, which may help us to distinguish authors. The idea to find discriminative nodes (words) is as follows. For each author, we made one adjacency network by taking average of the two novels. Then, each normalized row is regarded as one distribution for that row word, so the KL divergence between each pair of the authors can be calculated. Finally, words with the largest divergence sum are defined as discriminative words.
-
-We introduce two different approaches to visualize reduced network structures: (1) interactive adjacency matrix, and (2) interactive node-link visualization.
-
-
 ```{r, echo=FALSE, warning=FALSE}
-
 draw_3D_novel <- function(novelnum){
   novel <- read.table(paste("dataset/", books[novelnum,4], ".txt", sep=""))
   row_sum <- as.matrix(novel) %*% rep(1,211)
@@ -343,6 +332,77 @@ renderPlotly({
 ```
 
 
+### 2. Subnetwork Visualization (reduced size of the networks)
+
+Unfortunately, both adjacency matrix and node-link approaches do not represent function words network effectively due to its size. Alternative way to overcome this issue is to reduce dimensionality of the network.
+
+In this section, we constructed subnetworks based on some discriminative nodes, which may help us to distinguish authors. The idea to find discriminative nodes (words) is as follows. For each author, we made one adjacency network by taking average of the two novels. Then, each normalized row is regarded as one distribution for that row word, so the KL divergence between each pair of the authors can be calculated. Finally, words with the largest divergence sum are defined as discriminative words.
+
+We introduce two different approaches to visualize reduced network structures: (1) adjacency matrix, and (2) interactive node-link visualization.
+
+```{r, echo=FALSE, warning=FALSE}
+reduced_heatmap = function(novelnum){
+  novel = read.table(paste("dataset/", books[novelnum,4], ".txt", sep=""))
+  colnames(novel) = word_list
+  row.names(novel) = word_list
+  
+  # Normalizing rows by row max
+  book <- novel[dws_mask, dws_mask]
+  diag(book) <- 0
+  book <-t(apply(book,1, function(x) if (max(x)==0) x else 3 * x/max(x)))
+  book <- as.matrix(book)
+  idx <- (rowSums(book) != 0) | (colSums(book) != 0)
+  book <- book[idx, idx]
+  
+  ggraph(book, layout = "matrix") +
+    geom_edge_tile() +
+    coord_fixed() +
+    theme_void() +
+    labs(title = books[novelnum,3], subtitle = books[novelnum,2]) +
+    theme(plot.title=element_text(size=12, 
+                                  face="bold", 
+                                  family="American Typewriter",
+                                  color="tomato",
+                                  hjust=0.5,
+                                  lineheight=1.2),
+          plot.subtitle=element_text(size=12, 
+                                     family="American Typewriter",
+                                     face="bold",
+                                     hjust=0.5))  # subtitle
+}
+
+
+# shiny app
+inputPanel(checkboxGroupInput("Novel6", "Choose books:",
+                              c("Emma by Jane Austen" = "Emma",
+                                "Pride and Prejudice by Jane Austen" = "Pride and Prejudice",
+                                "A Christmas Carol by Charles Dickens" = "A Christmas Carol",
+                                "Oliver Twist  by Charles Dickens" = "Oliver Twist",
+                                "Hamlet by Shakespear" = "Hamlet",
+                                "Romeo and Juliet by Shakespear" = "Romeo and Juliet",
+                                "Adventures of Huckleberry Finn by Mark Twain" = 
+                                  "Adventures of Huckleberry Finn",
+                                "The Adventures of Tom Sawyer by Mark Twain" = 
+                                  "The Adventures of Tom Sawyer"), 
+                              selected = c("Emma", "Pride and Prejudice",
+                                           "Hamlet", "Romeo and Juliet")),
+           actionButton("Change6", "Update"))
+
+renderPlot({
+  input$Change6 # for actionButton
+  
+  novelname6 = isolate(input$Novel6)
+  novelnum6 = which(books[,3] %in% novelname6)
+  n6 = length(novelnum6)
+  
+  graph_result6 = list()
+  for (i in 1:n6){
+    graph_result6[[i]] = reduced_heatmap(novelnum6[i])
+  }
+  do.call(grid.arrange, c(graph_result6, ncol=2))}, outputArgs = list(width = "500px", height = "500px")
+)
+```
+
 ```{r, echo=FALSE, warning=FALSE}
 plot.net <- function(net, labels = 1, size = 1) {
   net.D3 <- igraph_to_networkD3(net)
@@ -408,7 +468,7 @@ renderForceNetwork({
 ```
 
 
-### 3. Reduced complexity of networks
+### 3. Network Statistics Visualization (reduced complexity of networks)
 
 Another way to handle large networks is to reduce network complexity. Then the goal is to extract useful information from the entire network and visualize the information rather than the network itself.
 
@@ -566,3 +626,8 @@ renderPlot({
   do.call(grid.arrange, c(graph_result5, ncol=2))}, outputArgs = list(width = "800px", height = "800px")
 )
 ```
+
+### Reference
+[1] Santiago Segarra, Mark Eisen, and Alejandro Ribeiro, Authorship attribution through function word  adjacency networks, IEEE Transactionson Signal Processing 63(2015), no.20, 5464–5478. 
+
+[2] Hanbaek Lyu, Facundo Memoli, and David Sivakoff, Sampling random graph homomorphisms and applications to network data analysis, arXiv:1910.09483.
