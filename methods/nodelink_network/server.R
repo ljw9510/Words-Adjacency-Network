@@ -56,7 +56,7 @@ function(input, output) {
     load("dws_mask.R")    # run disword.Rmd to get this object
     book <- book[dws_mask, dws_mask]
     diag(book) <- 0
-    book <- t(apply(book,1, function(x) if (max(x)==0) x else 3 * x/max(x)))
+    book <- 8*book/max(book)
     book <- as.matrix(book)
     idx <- (rowSums(book) != 0) | (colSums(book) != 0)
     book <- book[idx, idx]

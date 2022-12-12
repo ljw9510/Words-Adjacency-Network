@@ -35,13 +35,14 @@ row.names(book) = word_list
 Prepare the adjacent matrix.
 
 ```{r 2}
-book <-t(apply(book,1, function(x) if (max(x)==0) x else x/max(x)))
+diag(book) <- 0
+book <- book/max(book)
 book <- as.matrix(book)
 idx <- (rowSums(book) != 0) & (colSums(book) != 0)
 book <- book[idx, idx]
 # Transform to UU case
 book <- book + t(book)
-book <- ifelse(book > 0.5, 1, 0) 
+book <- ifelse(book > 0.02, 1, 0) 
 
 ```
 

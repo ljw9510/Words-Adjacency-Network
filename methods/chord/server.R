@@ -102,14 +102,14 @@ function(input, output) {
     colnames(book) = word_list
     row.names(book) = word_list
     diag(book) <- 0
-    book <-t(apply(book,1, function(x) if (max(x)==0) x else x/max(x)))
+    book <- book/max(book)
     book <- as.matrix(book)
     idx <- (rowSums(book) != 0) | (colSums(book) != 0)
     book <- book[idx, idx]
     # Transform to UU case
     book <- book + t(book)
     view(book)
-    book <- ifelse(book > 0.5, 1, 0) 
+    book <- ifelse(book > 0.02, 1, 0) 
   })
   
   output$chord<- renderPlot(.plot(net()))
