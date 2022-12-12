@@ -472,17 +472,7 @@ renderForceNetwork({
 
 Another way to handle large networks is to reduce network complexity. Then the goal is to extract useful information from the entire network and visualize the information rather than the network itself.
 
-We introduce two methods: (1) Word cloud based on node out-degrees, and (2) Conditional Homomorphism Density Profiles (CHDP). 
-
-CHDP was proposed by Lyu et al., (2019) [2]. Given a network $G$ with node set $V$ and weighted adjacency matrix $A$, CHDP with parameter $k\ge 0$ is a function-valued observable function defined as
-\begin{align*}\label{eq:def_CHDP}
-    f_{k}(t):=\mathbb{P}\left( A(x_{0},x_{k}) > t \,\big| \, A(x_{0},x_{1})>0, \, A(x_{1},x_{2})>0,\, \dots, A(x_{k-1},x_{k})>0  \right), \quad 0\le t \le 1. 
-\end{align*}
-where $x_{1},\dots,x_{k}$ are chosen i.i.d. uniformly at random from $V$. Namely, at each `level' $t\in [0,1]$, $f_{k}(t)$ measures the probability that a random copy of $(k+1)$-walk in $G$ with node sequence $(x_{0},\dots,x_{k})$ is a cycle in $G$ and the weight $A(x_{0}, x_{k})$ is larger than $t$. As we increase $t$, such conditional probability decreases, so $f_{k}(t)$ is a decreasing function in $t$. 
-
-We plot CHDP for several choices of the parameter $k$, which corresponds to the number of edges in the walk on $(x_{0},\dots,x_{k})$ being conditioned. When $k=0$, $f_{0}(t)$ equals the probability that a uniformly randomly chosen loop has a weight larger than $t$. When $k=1$, $f_{1}(t)$ equals the probability that a uniformly randomly chosen edge has a weight larger than $t$. When $k=2$, $f_{2}(t)$ is the probability that a uniformly randomly chosen walk of two edges has an edge of weight larger than $t$ that directly connects the first and the last node in the walk. 
-
-We remark that CHDP can be effectively computed by the Markov chain Monte Carlo algorithms for `motif sampling' problems proposed in [2]. The algorithms proceed by first finding a walk of $(k+1)$ edges using rejection sampling, and then iteratively evolving the copy of the walk inside the network by using either a Gibbs sampling or Metropolis-Hastings algorithm.
+We introduce two methods: (1) Full/Reduced wordcloud based on node out-degrees, and (2) Conditional Homomorphism Density Profiles (CHDP). 
 
 ```{r, echo=FALSE, warning=FALSE}
 draw_wordcloud = function(novelnum, maxwords) {
@@ -492,6 +482,32 @@ draw_wordcloud = function(novelnum, maxwords) {
   row.names(novel) = word_list
   
   book <- as.matrix(novel)
+  idx <- (rowSums(book) != 0) | (colSums(book) != 0)
+  book <- book[idx, idx]
+  book_freq <- rowSums(book)
+
+  set.seed(1234) # for reproducibility 
+  #layout(matrix(c(1, 2), nrow=2), heights=c(0.5, 4))
+  #par(mar=rep(0, 4))
+  #plot.new()
+  #text(x=0.5, y=0.5, paste(books[novelnum,3], "by", books[novelnum,2]),
+  #     family = "American Typewriter", col = "tomato", cex= 2)
+  wordcloud(words = names(book_freq), freq = book_freq, 
+            min.freq = 1, max.words=maxwords, random.order=FALSE, 
+            rot.per=0.35, colors=brewer.pal(8, "Dark2"))
+}
+
+
+draw_reduced_wordcloud = function(novelnum, maxwords) {
+  
+  novel = read.table(paste("dataset/", books[novelnum,4], ".txt", sep=""))
+  colnames(novel) = word_list
+  row.names(novel) = word_list
+  
+  book <- novel[dws_mask, dws_mask]
+  diag(book) <- 0
+  book <- as.matrix(book)
+
   idx <- (rowSums(book) != 0) | (colSums(book) != 0)
   book <- book[idx, idx]
   book_freq <- rowSums(book)
@@ -529,10 +545,23 @@ renderPlot({
   maxwords = isolate(input$nwords)
   novelname4 = isolate(input$Novel4)
   novelnum4 = which(books[,3] == novelname4)
-  draw_wordcloud(novelnum4, maxwords)}, outputArgs = list(width = "300px", height = "300px")
+  par(mfrow = c(1,2))
+  draw_wordcloud(novelnum4, maxwords)
+  draw_reduced_wordcloud(novelnum4, maxwords)}, outputArgs = list(width = "800px", height = "400px")
 )
+
 ```
 
+
+CHDP was proposed by Lyu et al., (2019) [2]. Given a network $G$ with node set $V$ and weighted adjacency matrix $A$, CHDP with parameter $k\ge 0$ is a function-valued observable function defined as
+\begin{align*}\label{eq:def_CHDP}
+    f_{k}(t):=\mathbb{P}\left( A(x_{0},x_{k}) > t \,\big| \, A(x_{0},x_{1})>0, \, A(x_{1},x_{2})>0,\, \dots, A(x_{k-1},x_{k})>0  \right), \quad 0\le t \le 1. 
+\end{align*}
+where $x_{1},\dots,x_{k}$ are chosen i.i.d. uniformly at random from $V$. Namely, at each `level' $t\in [0,1]$, $f_{k}(t)$ measures the probability that a random copy of $(k+1)$-walk in $G$ with node sequence $(x_{0},\dots,x_{k})$ is a cycle in $G$ and the weight $A(x_{0}, x_{k})$ is larger than $t$. As we increase $t$, such conditional probability decreases, so $f_{k}(t)$ is a decreasing function in $t$. 
+
+We plot CHDP for several choices of the parameter $k$, which corresponds to the number of edges in the walk on $(x_{0},\dots,x_{k})$ being conditioned. When $k=0$, $f_{0}(t)$ equals the probability that a uniformly randomly chosen loop has a weight larger than $t$. When $k=1$, $f_{1}(t)$ equals the probability that a uniformly randomly chosen edge has a weight larger than $t$. When $k=2$, $f_{2}(t)$ is the probability that a uniformly randomly chosen walk of two edges has an edge of weight larger than $t$ that directly connects the first and the last node in the walk. 
+
+We remark that CHDP can be effectively computed by the Markov chain Monte Carlo algorithms for `motif sampling' problems proposed in [2]. The algorithms proceed by first finding a walk of $(k+1)$ edges using rejection sampling, and then iteratively evolving the copy of the walk inside the network by using either a Gibbs sampling or Metropolis-Hastings algorithm. For Shiny app, $k = k_{1} + k_{2}$. 
 
 ```{r, echo=FALSE, warning=FALSE}
 draw_chd_plot = function(novelnum, k1, k2) {
