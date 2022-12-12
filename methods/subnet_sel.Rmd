@@ -1,0 +1,69 @@
+---
+title: "subnet"
+author: "Hao Yan"
+date: '2022-12-10'
+output: html_document
+---
+
+```{r 1}
+library(RColorBrewer)
+library(pheatmap)
+library(igraph)
+word_list = read.table("./dataset/functionwords_list.txt", head=FALSE)
+word_list <- as.matrix(word_list)
+node_importance = read.csv("node_dist.csv")
+node_importance = node_importance[order(-node_importance$variation),]
+node_importance
+```
+
+```{r 2}
+
+mask = node_importance$words[c(1:30)]
+books = c("austen_2.txt", "austen_4.txt", "dickens_1.txt", "dickens_4.txt", "shakespeare_1.txt", "shakespeare_5.txt", "twain_1.txt", "twain_4.txt")
+book_fullnames = c("Jane Austen, Emma",
+                       "Jane Austen, Pride and Prejudice",
+                       "Charles Dickens, A Christmas Carol",
+                       "Charles Dickens, Oliver Twist",
+                       "William Shakespeare, Hamlet",
+                       "William Shakespeare, Romeo and Juliet",
+                       "Mark Twain, Adventures of Huckleberry Finn",
+                       "Mark Twain, The Adventures of Tom Sawyer")
+plot_list = c()
+title = books[1]
+fulltitle = book_fullnames[1]
+path = paste0("dataset/", title)
+book = read.table(path, head=FALSE)   # Change the dataset here
+colnames(book) = word_list
+row.names(book) = word_list
+book <- book[mask, mask]
+# Remove cycles
+diag(book) <- 0
+# Normalization
+book <-t(apply(book,1, function(x) if (max(x)==0) x else 3 * x/max(x)))
+book <- as.matrix(book)
+row_plot = mask
+plots = pheatmap(book,color=colorRampPalette(brewer.pal(9,"Blues")[c(1,8)])(30),cluster_cols = F, cluster_rows= F,show_colnames=F, legend=F,border_color=FALSE,annotation_legend=F, main = fulltitle)
+plot_list = c(plots)
+for(i in 2:length(books)) {
+  title = books[i]
+  fulltitle = book_fullnames[i]
+  path = paste0("dataset/", title)
+  book = read.table(path, head=FALSE)   # Change the dataset here
+  colnames(book) = word_list
+  row.names(book) = word_list
+  book <- book[mask, mask]
+  # Remove cycles
+  diag(book) <- 0
+  # Normalization
+  book <-t(apply(book,1, function(x) if (max(x)==0) x else 3 * x/max(x)))
+  book <- as.matrix(book)
+  row_plot = mask
+  plots = pheatmap(book,color=colorRampPalette(brewer.pal(9,"Blues")[c(1,8)])(30),cluster_cols = F, cluster_rows= F,show_colnames=F, legend=F,border_color=FALSE,annotation_legend=F, main = fulltitle)
+  plot_list = c(plot_list, plots)
+}
+
+```
+
+
+
+
