@@ -5,9 +5,9 @@ account: joowonlee
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 7866479
-bundleId: 6624398
+bundleId: 6625444
 url: https://joowonlee.shinyapps.io/WANvisualization/
-when: 1670799038.75987
-lastSyncTime: 1670799038.75988
+when: 1670817908.08371
+lastSyncTime: 1670817908.08373
 asMultiple: FALSE
 asStatic: FALSE

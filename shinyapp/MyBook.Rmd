@@ -68,7 +68,7 @@ The goal of this project is to obtain an effective visualization of text data fr
 ### Function Word Adjacency Network (WAN)
 **Function word adjacency networks** are weighted networks introduced by Segarra, Eisen, and Ribeiro [1] that encode text data for the purpose of authorship attribution. Function words represent the words that are used for a grammatical purpose and do not have any linguistic meaning on their own such as ‘the’, ‘for’, and 'a'. In  [1], the authors argued that for each writer, there is a unique characteristic of the pattern of using function words. 
 
-We use the list $L$ of $N=211$ function words used in [1]. For a given novel $X$, we first compute a $N \times N$ word frequency matrix $M(X)$ whose $(i,j)$ entry is the frequency of the $i$th function word followed by the $j$th function word within 10 consecutive words. We then let $A(X)=M(A)/\max(M(A))$, so that each entry of $A(x)$ is between 0 and 1. The function word adjacency network (WAN) for the novel $X$, is defined to be the directed and weighted network $G(X)$ with node set $L$ and weighted adjacency matrix $A(X)$, where the ordered pair $(i,j)$ of nodes is endowed with weight $A(X)(i,j)$. This procedure results in a directed weighted network $G(X)$  for each text data $X$ on the common node set $L$. 
+We use the list $L$ of $N=211$ function words used in [1]. For a given novel $X$, we first compute a $N \times N$ word frequency matrix $M(X)$ whose $(i,j)$ entry is the frequency of the $i$th function word followed by the $j$th function word within 10 consecutive words. We then let $A(X)=M(A)/\max(M(A))$, so that each entry of $A(X)$ is between 0 and 1. The function word adjacency network (WAN) for the novel $X$, is defined to be the directed and weighted network $G(X)$ with node set $L$ and weighted adjacency matrix $A(X)$, where the ordered pair $(i,j)$ of nodes is endowed with weight $A(X)(i,j)$. This procedure results in a directed weighted network $G(X)$  for each text data $X$ on the common node set $L$. 
 
 ![](example.png){#id .class width=60% height=40%}
 
@@ -86,9 +86,9 @@ heatmap = function(novelnum){
   colnames(novel) = word_list
   row.names(novel) = word_list
   
-  # Normalizing rows by row max
-  book <- t(apply(novel, 1, function(x) if (max(x)==0) x else x/max(x)))
-  book <- as.matrix(book)
+  # Normalizing rows by entire max
+  novel <- novel/max(novel)
+  book <- as.matrix(novel)
   
   ggraph(book, layout = "matrix") +
     geom_edge_tile() +
@@ -113,13 +113,13 @@ chord <- function(novelnum){
   colnames(novel) = word_list
   row.names(novel) = word_list
   
-  book <-t(apply(novel, 1, function(x) if (max(x)==0) x else x/max(x)))
+  book <- novel/max(novel)
   book <- as.matrix(book)
   idx <- (rowSums(book) != 0) & (colSums(book) != 0)
   book <- book[idx, idx]
   # Transform to UU case
   book <- book + t(book)
-  book <- ifelse(book > 0.5, 1, 0) 
+  book <- ifelse(book > 0.02, 1, 0) 
   
   # Transform the adjacency matrix in a long format
   connect <- as.data.frame(book) %>%              
@@ -227,7 +227,6 @@ renderPlot({
   }
   do.call(grid.arrange, c(graph_result, ncol=2))}, outputArgs = list(width = "500px", height = "500px")
 )
-
 
 renderPlot({
   input$Change1 # for actionButton
@@ -349,7 +348,7 @@ reduced_heatmap = function(novelnum){
   # Normalizing rows by row max
   book <- novel[dws_mask, dws_mask]
   diag(book) <- 0
-  book <-t(apply(book,1, function(x) if (max(x)==0) x else 3 * x/max(x)))
+  book <- book/max(book)
   book <- as.matrix(book)
   #idx <- (rowSums(book) != 0) | (colSums(book) != 0)
   #book <- book[idx, idx]
@@ -401,8 +400,6 @@ renderPlot({
   }
   do.call(grid.arrange, c(graph_result6, ncol=2))}, outputArgs = list(width = "500px", height = "500px")
 )
-
-novelnum6 = c(17, 36)
 ```
 
 ```{r, echo=FALSE, warning=FALSE}
@@ -435,7 +432,8 @@ net <- function(novelnum){
   row.names(novel) = word_list
   book <- novel[dws_mask, dws_mask]
   diag(book) <- 0
-  book <-t(apply(book,1, function(x) if (max(x)==0) x else 3 * x/max(x)))
+  
+  book <- 8*book/max(book)
   book <- as.matrix(book)
   idx <- (rowSums(book) != 0) | (colSums(book) != 0)
   book <- book[idx, idx]
@@ -493,8 +491,7 @@ draw_wordcloud = function(novelnum, maxwords) {
   colnames(novel) = word_list
   row.names(novel) = word_list
   
-  book <-t(apply(novel, 1, function(x) if (max(x)==0) x else x/max(x)))
-  book <- as.matrix(book)
+  book <- as.matrix(novel)
   idx <- (rowSums(book) != 0) | (colSums(book) != 0)
   book <- book[idx, idx]
   book_freq <- rowSums(book)
@@ -532,7 +529,7 @@ renderPlot({
   maxwords = isolate(input$nwords)
   novelname4 = isolate(input$Novel4)
   novelnum4 = which(books[,3] == novelname4)
-  draw_wordcloud(novelnum4, maxwords)}, outputArgs = list(width = "800px", height = "800px")
+  draw_wordcloud(novelnum4, maxwords)}, outputArgs = list(width = "300px", height = "300px")
 )
 ```
 
